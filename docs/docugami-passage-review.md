@@ -88,17 +88,18 @@ the same whitespace-word count per question before answer generation.
 
 | Retrieval arm | Correctness (0–4) | Completeness (0–4) | Citation support (0–4) |
 |---|---:|---:|---:|
-| Top-k | 3.00 | 3.43 | 3.00 |
+| Top-k | 3.00 | 3.71 | 3.00 |
 | Fixed target | 4.00 | 4.00 | 4.00 |
 | Marginal coverage | 4.00 | 4.00 | 4.00 |
 
-Fixed-target and marginal-coverage scores tied on all seven questions. Each
-scored above top-k on three questions and tied on four. GPT-4o-mini generated
-and judged answers; its scores are not independent human assessments. Labels
-were assistant-authored and not independently reviewed, and the sample is too
-small to establish a general answer-quality gain. It also contains no dedicated
-exception-query set, so it does not measure the effect of `QUALIFIES` evidence
-inclusion.
+After the traversal-limit correction, fixed-target and marginal-coverage
+scores tied on all seven questions. Each scored above top-k on four questions
+and tied on three; no answer-generation or citation-format failures occurred.
+GPT-4o-mini generated and judged answers; its scores are not independent human
+assessments. Labels were assistant-authored and not independently reviewed,
+and the sample is too small to establish a general answer-quality gain. It
+also contains no dedicated exception-query set, so it does not measure the
+effect of `QUALIFIES` evidence inclusion.
 
 The API runner is
 [`evaluation/docugami_answer_qa.py`](../evaluation/docugami_answer_qa.py). The

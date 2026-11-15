@@ -139,23 +139,33 @@ It evaluated 171 eligible SEC questions (195 total). Document-pattern precision,
 recall and F1 are macro-averaged per question against the dataset's `Source Docs`
 filename patterns; they measure document retrieval, not passage support.
 
-For each question, top-k and document reranking were clipped to the same
-whitespace-word count (the smaller available context). This controls for context
-size within each policy comparison:
+For each question, top-k, fixed-target and marginal-coverage outputs were
+truncated to the same whitespace-word count: the smallest available context
+under the shared 4,500-word cap. This direct three-way comparison uses a mean
+of 1,826 words per arm:
 
-| Selection policy | Method | Precision | Recall | F1 | Mean context words | Median latency |
-|---|---|---:|---:|---:|---:|---:|
-| Fixed target | Top-k, size-matched | 29.2% | **98.2%** | 39.5% | 4,164 | 45.3 ms |
-| Fixed target | Document reranking, size-matched | **43.7%** | 69.7% | **47.9%** | 4,164 | 116.5 ms |
-| Marginal coverage | Top-k, size-matched | 37.2% | **94.0%** | **47.4%** | 1,811 | 49.7 ms |
-| Marginal coverage | Document reranking, size-matched | **50.0%** | 32.7% | 36.0% | 1,811 | 112.6 ms |
+| Retrieval arm | Precision | Document recall | F1 | Natural output words | Natural output docs | Mean requirement score | Requirements sufficient |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Top-k | 37.2% | **94.6%** | **47.4%** | 4,255 | 7.96 | 0.662 | 20.5% |
+| Fixed target | 49.3% | 32.2% | 35.3% | 4,468 | 3.00 | 0.672 | 23.1% |
+| Marginal coverage | **49.4%** | 32.2% | 35.4% | **1,827** | **1.04** | **0.672** | **23.7%** |
 
-At equal context size, fixed-target reranking gains **8.4 F1 points** over
-top-k; its F1 gain is not explained only by returning less text. Under the new
-marginal-coverage policy, document reranking trails size-matched top-k by
-**11.4 F1 points**, with substantially lower recall. The policy comparison is
-therefore not a blanket KPI improvement. Thresholds remain hand-set, and these
-document labels still do not measure passage entailment.
+The low document recall is the expected selectivity trade-off, not by itself
+evidence of failed RAG: `Source Docs` labels expect source filenames and do not
+identify which passages are necessary to answer a question. At the same
+matched word count, fixed-target and marginal coverage are nearly tied on this
+document-pattern metric. Both have higher precision and slightly higher
+semantic requirement coverage than top-k, while top-k returns more labeled
+source documents. Requirement scores are an uncalibrated proxy, not human
+passage judgments; the relevant question is whether required evidence and
+correct, supported answers survive the selection.
+
+The natural outputs show the intended size trade-off: marginal coverage
+returned about 1,827 words and 1.04 documents on average, versus 4,468 words
+and 3 documents for fixed target. These word counts are whitespace-delimited,
+not model-token counts. The earlier per-policy matched comparisons in the
+[full report](docs/docugami-evaluation.md) used different common budgets and
+should not be read as a direct fixed-versus-marginal comparison.
 
 ### Seven-question LLM answer QA pilot
 
@@ -166,18 +176,23 @@ word count. Reference facts and PDF page pointers are in
 
 | Retrieval arm | Correctness (0–4) | Completeness (0–4) | Citation support (0–4) |
 |---|---:|---:|---:|
-| Top-k | 3.00 | 3.43 | 3.00 |
+| Top-k | 3.00 | 3.71 | 3.00 |
 | Fixed target | 4.00 | 4.00 | 4.00 |
 | Marginal coverage | 4.00 | 4.00 | 4.00 |
 
-Fixed-target and marginal coverage tied on these rubric scores for all seven
-questions. Each pipeline arm scored better than top-k on three questions and
-tied on four. This is a small, assistant-authored pilot, not independent
-validation: the labels were checked against cited PDF pages but not
-independently reviewed, and the same model generated and judged answers. It
-does not establish general answer-quality improvement or the impact of
-`QUALIFIES` links; the seven questions are not a dedicated exception-query set.
-The current qualifier extractor is heuristic.
+After the traversal-limit correction, fixed-target and marginal coverage tied
+on all seven questions. Each scored above top-k on four questions and tied on
+three; there were no answer-generation or citation-format failures. This
+remains a small, assistant-authored pilot, not independent validation: labels
+were checked against cited PDF pages but not independently reviewed, and the
+same model generated and judged answers. It does not establish general
+answer-quality improvement or the impact of `QUALIFIES` links; these are not
+dedicated exception queries.
+
+The qualifier extractor is still heuristic. An offline scan found 557 proposed
+`QUALIFIES` edges across 85 parseable local PDFs (two PDFs could not be parsed);
+spot checks found clear adjacency-based false links. This is not a precision or
+recall estimate, and the mixed corpus is not a representative policy benchmark.
 
 See the [full benchmark and methodology](docs/docugami-evaluation.md), the
 [passage-level QA review](docs/docugami-passage-review.md), and

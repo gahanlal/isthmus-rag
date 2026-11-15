@@ -18,6 +18,8 @@ from isthmus.coverage import SUFFICIENT, aggregate_coverage, requirement_score
 
 @dataclass(frozen=True, slots=True)
 class TraversalConfig:
+    """Per-seed directional limits with document-wide node and token caps."""
+
     max_seeds_per_document: int | None = None
     max_nodes: int = 40
     max_depth: int = 6
@@ -32,6 +34,7 @@ class TraversalConfig:
 @dataclass(frozen=True, slots=True)
 class _State:
     chunk_id: str
+    seed_chunk_id: str
     direction: RelationshipType | None
     depth: int
     low_similarity_streak: int
@@ -105,9 +108,9 @@ class AdaptiveGraphRetriever:
         relevant_edges = self._eligible_relationships(query_plan)
         queue: deque[_State] = deque()
         for seed in seeds:
-            queue.append(_State(seed, None, 0, 0, (seed,), ()))
-            queue.append(_State(seed, RelationshipType.PREVIOUS, 0, 0, (seed,), ()))
-            queue.append(_State(seed, RelationshipType.NEXT, 0, 0, (seed,), ()))
+            queue.append(_State(seed, seed, None, 0, 0, (seed,), ()))
+            queue.append(_State(seed, seed, RelationshipType.PREVIOUS, 0, 0, (seed,), ()))
+            queue.append(_State(seed, seed, RelationshipType.NEXT, 0, 0, (seed,), ()))
 
         visited: list[str] = []
         included: list[str] = []
@@ -116,8 +119,11 @@ class AdaptiveGraphRetriever:
         followed: list[RelationshipType] = []
         visited_set: set[str] = set()
         included_set: set[str] = set()
-        expanded_states: set[tuple[str, RelationshipType | None, bool]] = set()
-        direction_counts = {RelationshipType.PREVIOUS: 0, RelationshipType.NEXT: 0}
+        expanded_states: set[tuple[str, RelationshipType | None, bool, str]] = set()
+        direction_counts = {
+            seed: {RelationshipType.PREVIOUS: 0, RelationshipType.NEXT: 0}
+            for seed in seeds
+        }
         requirement_scores_cache: dict[str, dict[str, float]] = {}
         topic_terms = frozenset().union(
             *(requirement.terms for requirement in query_plan.requirements if requirement.id != "exceptions")
@@ -140,7 +146,12 @@ class AdaptiveGraphRetriever:
             reached_by_qualifies = bool(state.edge_types) and (
                 state.edge_types[-1] == RelationshipType.QUALIFIES
             )
-            state_key = (state.chunk_id, state.direction, reached_by_qualifies)
+            state_key = (
+                state.chunk_id,
+                state.direction,
+                reached_by_qualifies,
+                state.seed_chunk_id,
+            )
             if state_key in expanded_states:
                 continue
             expanded_states.add(state_key)
@@ -184,10 +195,12 @@ class AdaptiveGraphRetriever:
                 next_chunk = document_chunks.get(next_id)
                 if next_chunk is None:
                     continue
-                if edge.relationship_type in direction_counts:
-                    if direction_counts[edge.relationship_type] >= self._direction_limit(edge.relationship_type):
+                if edge.relationship_type in direction_counts[state.seed_chunk_id]:
+                    if (
+                        direction_counts[state.seed_chunk_id][edge.relationship_type]
+                        >= self._direction_limit(edge.relationship_type)
+                    ):
                         continue
-                    direction_counts[edge.relationship_type] += 1
                 next_score = similarities.get(next_id)
                 if next_score is None:
                     next_score = similarity_for_query(query, next_chunk)
@@ -206,6 +219,8 @@ class AdaptiveGraphRetriever:
                     )
                 if not can_traverse:
                     continue
+                if edge.relationship_type in direction_counts[state.seed_chunk_id]:
+                    direction_counts[state.seed_chunk_id][edge.relationship_type] += 1
                 paths.append(
                     TraversalPath(
                         chunk_ids=state.path + (next_id,),
@@ -217,6 +232,7 @@ class AdaptiveGraphRetriever:
                 queue.append(
                     _State(
                         chunk_id=next_id,
+                        seed_chunk_id=state.seed_chunk_id,
                         direction=state.direction,
                         depth=state.depth + 1,
                         low_similarity_streak=low_streak,

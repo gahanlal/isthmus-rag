@@ -132,15 +132,13 @@ latency estimates.
 This earlier retrieval-only run did not generate answers. Its word counts and
 metrics are historical, not the matched-context results below.
 
-## Matched-context document-pattern comparison
+## Earlier per-policy matched-context comparison
 
-The matched evaluation uses the same token-aware index, 171 eligible questions,
-and per-question source-document labels. For each policy, the top-k and
-document-reranking outputs were truncated to the exact whitespace-word count of
-the smaller context for that question. Thus methods have equal total words
-within each pair, although the fixed-target pair and marginal-coverage pair
-have different mean budgets. The word counts are whitespace-delimited words,
-not the answer model's tokenizer tokens.
+These earlier paired runs matched document reranking to top-k within each
+policy, but used a different word budget for each policy. They predate the
+per-seed traversal-limit correction below. Retain them for historical
+comparison; do not compare fixed-target and marginal-coverage rows directly.
+The word counts are whitespace-delimited words, not model-token counts.
 
 | Selection policy | Method | Precision | Recall | F1 | Mean context words | Median latency ms |
 |---|---|---:|---:|---:|---:|---:|
@@ -160,6 +158,39 @@ These are still coarse filename-pattern metrics, not passage-level relevance
 or answer correctness. Similarity and traversal thresholds remain hand-set;
 this comparison does not calibrate them.
 
+## Current three-arm equal-context comparison
+
+A direct rerun compared top-k, fixed-target and marginal-coverage on the same
+171 eligible questions, index, embeddings and retrieval configuration. For
+each question, all three contexts were clipped to the smallest available
+whitespace-word count under the shared 4,500-word cap; the mean common context
+was **1,825.56 words per arm**. This run uses the per-seed directional traversal
+limits described in the current graph implementation.
+
+| Arm | Precision | Document recall | F1 | Mean natural words | Mean natural docs | Mean docs after matching | Mean requirement score | Sufficient requirements |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Top-k | 37.23 | **94.59** | **47.44** | 4,254.94 | 7.96 | 5.56 | 0.662 | 20.5% |
+| Fixed target | 49.32 | 32.16 | 35.34 | 4,468.08 | 3.00 | 1.05 | 0.672 | 23.1% |
+| Marginal coverage | **49.42** | 32.16 | 35.44 | **1,826.94** | **1.04** | **1.04** | **0.672** | **23.7%** |
+
+`Source Docs` filename-pattern recall is not passage recall or answer
+completeness. The selective arms return fewer source-labeled documents by
+design, so lower document recall is a trade-off to inspect, not a goal to
+maximize or an automatic failure. At the same matched context size,
+fixed-target and marginal coverage are nearly tied on document-pattern F1.
+Marginal coverage returns about 2,600 fewer natural-output words than
+fixed-target and selects about one document instead of three. Its semantic
+requirement metrics are slightly higher than top-k, but the difference is
+small and the scores are an uncalibrated proxy, not human evidence labels.
+
+These results support retaining marginal coverage as a compact, configurable
+policy for further evaluation; they do **not** establish that it improves
+answer quality or should replace fixed-target in every workload. The
+seven-question answer QA pilot below provides a small answer-level check, but
+its judge and labels have important limitations. Word counts are
+whitespace-delimited, not model-token counts. Latencies are one local run, not
+a repeated performance benchmark.
+
 ## Matched-context LLM answer QA pilot
 
 Seven assistant-authored question/fact/source-page labels in
@@ -174,14 +205,14 @@ citation-assessment gate was not run. The report is produced by
 
 | Retrieval arm | Correctness (0–4) | Completeness (0–4) | Citation support (0–4) |
 |---|---:|---:|---:|
-| Top-k | 3.00 | 3.43 | 3.00 |
+| Top-k | 3.00 | 3.71 | 3.00 |
 | Fixed target | 4.00 | 4.00 | 4.00 |
 | Marginal coverage | 4.00 | 4.00 | 4.00 |
 
-By summed rubric scores, fixed-target versus top-k had 3 wins, 0 losses and 4
-ties; marginal-coverage versus top-k had the same; fixed-target versus
-marginal-coverage tied on all 7 questions. There were no answer-generation or
-citation-format failures in this run.
+This post-traversal-correction run had no answer-generation or citation-format
+failures. By summed rubric scores, fixed-target versus top-k had 4 wins, 0
+losses and 3 ties; marginal-coverage versus top-k had the same; fixed-target
+versus marginal-coverage tied on all 7 questions.
 
 This is a small, model-judged pilot, not independent validation: labels were
 checked against the cited PDF pages but were not independently reviewed, and
@@ -192,6 +223,18 @@ edges. The questions are not a dedicated exception-query test set, and the
 heuristic qualifier extractor needs separate evaluation. See the
 [passage-level QA review](docugami-passage-review.md) for prior retrieval-only
 checks and limitations.
+
+## QUALIFIES extraction audit status
+
+An offline scan applied the current heuristic to 87 local PDFs: 85 parsed, 2
+SEC files failed pypdf's array safety limit, and 557 `QUALIFIES` edges were
+produced. A deterministic 40-edge sample was stratified across local PDFs and
+the four Docugami sectors. Spot checks found obvious false links caused by
+generic keyword matches and nearby but unrelated chunks. This is **not** a
+precision estimate, and it gives no recall estimate because it samples
+predicted edges rather than missed exception relationships. The sample is
+assistant-reviewed, not independently human-labeled; a representative,
+manually reviewed exception/policy set is still needed.
 
 ## Reproduce
 

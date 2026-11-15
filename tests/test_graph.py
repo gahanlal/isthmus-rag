@@ -115,6 +115,182 @@ def test_all_global_hits_seed_expansion_by_default():
     assert set(evidence.included_chunk_ids) == {chunk.id for chunk in chunks}
 
 
+def test_each_seed_gets_its_own_directional_expansion_budget():
+    seed_ids = [f"seed-{number}" for number in range(5)]
+    neighbor_ids = ["neighbor-0a", "neighbor-0b", "neighbor-1", "neighbor-2", "neighbor-3", "neighbor-4"]
+    chunks = [
+        Chunk(chunk_id, "doc", "sector", chunk_id, number, token_count=1)
+        for number, chunk_id in enumerate(seed_ids + neighbor_ids, start=1)
+    ]
+    scores = {chunk.id: 0.9 for chunk in chunks}
+    edges = [
+        Relationship("seed-0", "neighbor-0a", RelationshipType.NEXT),
+        Relationship("seed-0", "neighbor-0b", RelationshipType.NEXT),
+        *[
+            Relationship(f"seed-{number}", f"neighbor-{number}", RelationshipType.NEXT)
+            for number in range(1, 5)
+        ],
+    ]
+    retriever = AdaptiveGraphRetriever(
+        chunks,
+        edges,
+        lambda _query, chunk: scores[chunk.id],
+        TraversalConfig(
+            max_nodes=20,
+            max_depth=1,
+            max_backward=0,
+            max_forward=1,
+            include_threshold=0.6,
+        ),
+    )
+    plan = QueryPlan(
+        "question",
+        "factual",
+        (QueryRequirement("main", "question", frozenset({"question"})),),
+        False,
+        False,
+    )
+    hits = [
+        SearchHit(next(chunk for chunk in chunks if chunk.id == seed_id), 0.9, rank)
+        for rank, seed_id in enumerate(seed_ids, start=1)
+    ]
+
+    evidence = retriever.retrieve("doc", plan, hits)
+
+    assert set(evidence.seed_chunk_ids) == set(seed_ids)
+    assert set(evidence.visited_chunk_ids) >= {
+        "neighbor-0a",
+        "neighbor-1",
+        "neighbor-2",
+        "neighbor-3",
+        "neighbor-4",
+    }
+    assert "neighbor-0b" not in evidence.visited_chunk_ids
+    assert len(evidence.included_chunk_ids) == len(set(evidence.included_chunk_ids))
+
+
+def test_rejected_edge_does_not_consume_directional_expansion_budget():
+    chunks = [
+        Chunk("seed", "doc", "sector", "seed", 1, token_count=1),
+        Chunk("rejected", "doc", "sector", "rejected", 2, token_count=1),
+        Chunk("useful", "doc", "sector", "useful", 3, token_count=1),
+    ]
+    scores = {"seed": 0.9, "rejected": 0.1, "useful": 0.9}
+    retriever = AdaptiveGraphRetriever(
+        chunks,
+        [
+            Relationship("seed", "rejected", RelationshipType.NEXT),
+            Relationship("seed", "useful", RelationshipType.NEXT),
+        ],
+        lambda _query, chunk: scores[chunk.id],
+        TraversalConfig(
+            max_nodes=10,
+            max_depth=1,
+            max_low_similarity_bridges=0,
+            max_backward=0,
+            max_forward=1,
+            include_threshold=0.6,
+        ),
+    )
+    plan = QueryPlan(
+        "question",
+        "factual",
+        (QueryRequirement("main", "question", frozenset({"question"})),),
+        False,
+        False,
+    )
+    evidence = retriever.retrieve(
+        "doc",
+        plan,
+        [SearchHit(chunks[0], 0.9, 1)],
+    )
+
+    assert "rejected" not in evidence.visited_chunk_ids
+    assert "useful" in evidence.included_chunk_ids
+
+
+def test_overlapping_seed_paths_traverse_bridges_but_deduplicate_evidence():
+    chunks = [
+        Chunk("seed-0", "doc", "sector", "seed 0", 1, token_count=1),
+        Chunk("seed-1", "doc", "sector", "seed 1", 2, token_count=1),
+        Chunk("bridge", "doc", "sector", "bridge", 3, token_count=1),
+        Chunk("answer", "doc", "sector", "answer", 4, token_count=1),
+    ]
+    scores = {"seed-0": 0.99, "seed-1": 0.98, "bridge": 0.2, "answer": 0.9}
+    retriever = AdaptiveGraphRetriever(
+        chunks,
+        [
+            Relationship("seed-0", "bridge", RelationshipType.NEXT),
+            Relationship("seed-1", "bridge", RelationshipType.NEXT),
+            Relationship("bridge", "answer", RelationshipType.NEXT),
+        ],
+        lambda _query, chunk: scores[chunk.id],
+        TraversalConfig(
+            max_nodes=10,
+            max_depth=3,
+            max_low_similarity_bridges=1,
+            max_backward=0,
+            max_forward=2,
+            include_threshold=0.6,
+        ),
+    )
+    plan = QueryPlan(
+        "question",
+        "factual",
+        (QueryRequirement("main", "question", frozenset({"question"})),),
+        False,
+        False,
+    )
+    hits = [
+        SearchHit(chunks[index], scores[chunks[index].id], index + 1)
+        for index in range(2)
+    ]
+
+    evidence = retriever.retrieve("doc", plan, hits)
+
+    assert set(evidence.visited_chunk_ids) == {"seed-0", "seed-1", "bridge", "answer"}
+    assert "bridge" not in evidence.included_chunk_ids
+    assert evidence.included_chunk_ids.count("answer") == 1
+    assert {
+        path.chunk_ids
+        for path in evidence.paths
+        if path.chunk_ids[-1] == "answer"
+    } == {
+        ("seed-0", "bridge", "answer"),
+        ("seed-1", "bridge", "answer"),
+    }
+
+
+def test_max_nodes_remains_a_document_wide_cap_after_seeds_are_processed():
+    seed_ids = [f"seed-{number}" for number in range(5)]
+    chunks = [
+        Chunk(chunk_id, "doc", "sector", chunk_id, number, token_count=1)
+        for number, chunk_id in enumerate(seed_ids, start=1)
+    ]
+    retriever = AdaptiveGraphRetriever(
+        chunks,
+        (),
+        lambda _query, _chunk: 0.9,
+        TraversalConfig(max_nodes=5, max_tokens_per_document=10),
+    )
+    plan = QueryPlan(
+        "question",
+        "factual",
+        (QueryRequirement("main", "question", frozenset({"question"})),),
+        False,
+        False,
+    )
+    hits = [
+        SearchHit(chunk, 0.9, rank)
+        for rank, chunk in enumerate(chunks, start=1)
+    ]
+
+    evidence = retriever.retrieve("doc", plan, hits)
+
+    assert evidence.visited_chunk_ids == tuple(seed_ids)
+    assert evidence.included_chunk_ids == tuple(seed_ids)
+
+
 def test_traversal_never_crosses_document_boundary():
     chunks = [
         Chunk("seed", "doc", "sector", "seed policy", 1, token_count=1),
