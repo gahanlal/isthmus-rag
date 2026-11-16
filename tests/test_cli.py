@@ -1,3 +1,5 @@
+"""Test CLI query generation and PDF indexing validation."""
+
 import json
 import sys
 from types import SimpleNamespace
@@ -11,6 +13,7 @@ from isthmus.models import Chunk, Document
 
 
 def test_query_cli_can_generate_answer(tmp_path, monkeypatch, capsys):
+    """Verify that query cli can generate answer."""
     database = tmp_path / "test.db"
     provider = FakeEmbeddingProvider()
     with SQLiteIndex(provider, database) as index:
@@ -46,6 +49,7 @@ def test_query_cli_can_generate_answer(tmp_path, monkeypatch, capsys):
 
 @pytest.mark.parametrize("sector_args", [[], ["--sector", "  "]])
 def test_index_cli_requires_nonempty_sector_before_opening_provider(monkeypatch, sector_args, capsys):
+    """Verify that index cli requires nonempty sector before opening provider."""
     monkeypatch.setattr(sys, "argv", ["isthmus", "index-pdfs", "--model", "embed", *sector_args])
     monkeypatch.setattr(cli, "OpenAIEmbeddingProvider", lambda **kwargs: pytest.fail("provider opened"))
     with pytest.raises(SystemExit) as error:
@@ -55,6 +59,7 @@ def test_index_cli_requires_nonempty_sector_before_opening_provider(monkeypatch,
 
 
 def test_index_cli_assigns_sector_to_every_pdf(tmp_path, monkeypatch, capsys):
+    """Verify that index cli assigns sector to every pdf."""
     pdf_dir = tmp_path / "pdfs"
     pdf_dir.mkdir()
     (pdf_dir / "cyber-law.pdf").write_bytes(b"First content")

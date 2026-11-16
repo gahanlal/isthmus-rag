@@ -1,3 +1,5 @@
+"""Test answer generation, citation validation, and provider selection."""
+
 import json
 
 import pytest
@@ -9,21 +11,25 @@ from conftest import FakeEmbeddingProvider
 
 class FakeAnswerProvider:
     def __init__(self, response, assessment='{"supported": true}'):
+        """Initialize the fake answer and assessment responses."""
         self.response = response
         self.assessment = assessment
         self.prompt = None
         self.assessment_prompt = None
 
     def generate(self, prompt):
+        """Return the configured JSON answer response."""
         self.prompt = json.loads(prompt)
         return self.response
 
     def assess(self, prompt):
+        """Return the configured JSON citation assessment."""
         self.assessment_prompt = json.loads(prompt)
         return self.assessment
 
 
 def test_generate_answer_resolves_citations_to_retrieved_sources():
+    """Verify that generate answer resolves citations to retrieved sources."""
     pipeline = build_demo(FakeEmbeddingProvider())
     result = pipeline.query("What are the travel reimbursement rules?")
     provider = FakeAnswerProvider('{"answer": "Travel is reimbursed [S1]."}')
@@ -42,6 +48,7 @@ def test_generate_answer_resolves_citations_to_retrieved_sources():
     '{"supported": false}', '{"supported": "true"}', '{}', 'not json',
 ])
 def test_generate_answer_rejects_failed_or_invalid_assessment(assessment):
+    """Verify that generate answer rejects failed or invalid assessment."""
     pipeline = build_demo(FakeEmbeddingProvider())
     result = pipeline.query("travel reimbursement")
     provider = FakeAnswerProvider('{"answer": "Unsupported claim [S1]."}', assessment)
@@ -56,6 +63,7 @@ def test_generate_answer_rejects_failed_or_invalid_assessment(assessment):
     'not json',
 ])
 def test_generate_answer_rejects_invalid_or_unverifiable_citations(response):
+    """Verify that generate answer rejects invalid or unverifiable citations."""
     pipeline = build_demo(FakeEmbeddingProvider())
     result = pipeline.query("travel reimbursement")
     with pytest.raises(ValueError):
@@ -63,6 +71,7 @@ def test_generate_answer_rejects_invalid_or_unverifiable_citations(response):
 
 
 def test_generate_answer_with_no_context_does_not_call_model():
+    """Verify that generate answer with no context does not call model."""
     pipeline = build_demo(FakeEmbeddingProvider())
     result = pipeline.query("travel")
     from dataclasses import replace
@@ -74,15 +83,18 @@ def test_generate_answer_with_no_context_does_not_call_model():
 
 
 def test_openai_answer_provider_uses_selected_model(monkeypatch):
+    """Verify that openai answer provider uses selected model."""
     from types import SimpleNamespace
 
     calls = []
 
     class Client:
         def __init__(self, **kwargs):
+            """Initialize the test double and its configured state."""
             self.chat = SimpleNamespace(completions=self)
 
         def create(self, **kwargs):
+            """Return a configured fake response for the test request."""
             calls.append(kwargs)
             return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"answer":"ok [S1]"}'))])
 
@@ -97,6 +109,7 @@ def test_openai_answer_provider_uses_selected_model(monkeypatch):
 
 
 def test_anthropic_answer_provider_uses_selected_model(monkeypatch):
+    """Verify that anthropic answer provider uses selected model."""
     from types import SimpleNamespace
     from isthmus.generation import AnthropicAnswerProvider
 
@@ -104,9 +117,11 @@ def test_anthropic_answer_provider_uses_selected_model(monkeypatch):
 
     class Client:
         def __init__(self, **kwargs):
+            """Initialize the test double and its configured state."""
             self.messages = self
 
         def create(self, **kwargs):
+            """Return a configured fake response for the test request."""
             calls.append(kwargs)
             return SimpleNamespace(content=[SimpleNamespace(type="text", text='{"answer":"ok [S1]"}')])
 

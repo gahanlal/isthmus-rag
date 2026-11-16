@@ -100,13 +100,23 @@ Reports:
 - [Docugami evaluation report](docs/docugami-evaluation.md)
 - [Docugami passage review](docs/docugami-passage-review.md)
 
+## Code map
+
+- `src/isthmus/` — retrieval pipeline, indexing, parsing, sector selection,
+  graph expansion, answer generation, and user-facing interfaces.
+- `src/isthmus/evaluation/` — reusable benchmark runners, datasets, and metrics.
+- `evaluation/` — dataset-specific RepLiQA and Docugami evaluation scripts.
+- `tests/` — automated checks for the package and evaluation tools.
+
+Each Python file and function has a short docstring describing its purpose.
+
 ## Run locally
 
 For developers, with Python 3.11 or newer:
 
 ```powershell
-git clone https://github.com/gahanlal/Contextweave.git
-cd Contextweave
+git clone https://github.com/gahanlal/isthmus-rag.git
+cd isthmus-rag
 py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt

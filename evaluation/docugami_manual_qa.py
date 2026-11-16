@@ -29,6 +29,7 @@ CASES = (
 
 
 def main() -> None:
+    """Retrieve size-matched top-k and Isthmus contexts for the manually labeled questions."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)

@@ -21,6 +21,7 @@ MODEL_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
 
 class HybridSearch:
     def __init__(self, chunks):
+        """Build token postings and document lengths for BM25-style lexical ranking."""
         self.chunks = {chunk.id: chunk for chunk in chunks}
         self.postings = defaultdict(list)
         self.lengths = {}
@@ -34,6 +35,7 @@ class HybridSearch:
         self.average_length = sum(self.lengths.values()) / max(1, len(self.lengths))
 
     def rank(self, query, dense_hits, limit):
+        """Fuse lexical BM25 candidates and dense search hits by reciprocal rank."""
         scores = defaultdict(float)
         count = len(self.chunks)
         for token in terms(query):
@@ -55,6 +57,7 @@ class HybridSearch:
 
 class CrossEncoder:
     def __init__(self):
+        """Download and configure the tokenizer and ONNX cross-encoder model."""
         tokenizer_path = hf_hub_download(MODEL_REPOSITORY, "tokenizer.json", revision=MODEL_REVISION)
         model_path = hf_hub_download(MODEL_REPOSITORY, "onnx/model_quint8_avx2.onnx", revision=MODEL_REVISION)
         self.tokenizer = Tokenizer.from_file(tokenizer_path)
@@ -66,6 +69,7 @@ class CrossEncoder:
         self.session = ort.InferenceSession(model_path, sess_options=options, providers=["CPUExecutionProvider"])
 
     def rerank(self, query, chunks, limit=10):
+        """Score query-chunk pairs and return chunks ordered by cross-encoder score."""
         if not chunks:
             return ()
         encodings = self.tokenizer.encode_batch([(query, chunk.content) for chunk in chunks])
@@ -86,6 +90,7 @@ class CrossEncoder:
 
 class PageMerger:
     def __init__(self, chunks):
+        """Group and order chunks by document and source page."""
         self.pages = defaultdict(list)
         for chunk in chunks:
             self.pages[(chunk.document_id, chunk.source_location)].append(chunk)
@@ -93,6 +98,7 @@ class PageMerger:
             page.sort(key=lambda chunk: chunk.sequence_number)
 
     def merge(self, hits):
+        """Expand hit pages when enough chunks on the page were retrieved, deduplicating results."""
         hit_ids = {hit.chunk.id for hit in hits}
         seen = set()
         result = []
@@ -109,6 +115,7 @@ class PageMerger:
 
 
 def run_comparators(index, query, hybrid, cross_encoder, merger, limit):
+    """Run hybrid, cross-encoder, and page-merge baselines and measure their latency."""
     started = perf_counter()
     vector = index.embed_query(query)
     hits = index.search_by_vector(vector, limit=limit)

@@ -1,3 +1,5 @@
+"""Plan query intent and evidence requirements, with optional model-backed planners and sector selection."""
+
 from __future__ import annotations
 
 import json
@@ -38,16 +40,18 @@ _SECTOR_SELECTION_SYSTEM_PROMPT = (
 
 
 class QueryPlanner(Protocol):
-    def plan(self, query: str) -> QueryPlan: ...
+    def plan(self, query: str) -> QueryPlan: """Define the interface for converting a query into a structured plan."""; ...
 
 
 class LLMQueryPlanner:
     """Optional planner backed by a caller-provided model completion function."""
 
     def __init__(self, complete: Callable[[str], str]) -> None:
+        """Store the completion callback used to request query plans."""
         self.complete = complete
 
     def plan(self, query: str) -> QueryPlan:
+        """Parse and validate a model-generated plan, falling back to deterministic planning on errors."""
         prompt = (
             "Return JSON only with fields intent (factual, explanatory or comparative), "
             "asks_exceptions (boolean), and requirements (nonempty array of objects with "
@@ -87,6 +91,7 @@ class LLMQueryPlanner:
 
 
 def planner_from_environment() -> QueryPlanner | None:
+    """Create an optional model-backed planner from environment settings."""
     model = os.getenv("ISTHMUS_QUERY_PLANNER_MODEL", "").strip()
     if not model:
         return None
@@ -95,6 +100,7 @@ def planner_from_environment() -> QueryPlanner | None:
     provider = answer_provider(protocol, model, endpoint)
 
     def complete(prompt: str) -> str:
+        """Request a completion from the configured OpenAI or Anthropic provider."""
         if isinstance(provider, OpenAIAnswerProvider):
             response = provider.client.chat.completions.create(
                 model=provider.model, messages=[{"role": "user", "content": prompt}]
@@ -119,6 +125,7 @@ def sector_selector_from_environment(
     *,
     enabled: bool | None = None,
 ) -> LLMSectorSelector | None:
+    """Create an optional GPT-4o-mini sector selector from environment settings."""
     if enabled is None:
         setting = os.getenv("ISTHMUS_LLM_SECTOR_SELECTION", "").strip().lower()
         if setting in {"", "0", "false"}:
@@ -140,6 +147,7 @@ def sector_selector_from_environment(
     )
 
     def complete(prompt: str) -> str:
+        """Request a JSON sector choice from the configured OpenAI client."""
         response = client.responses.create(
             model="gpt-4o-mini",
             instructions=_SECTOR_SELECTION_SYSTEM_PROMPT,
@@ -155,6 +163,7 @@ def sector_selector_from_environment(
 
 
 def terms(text: str) -> frozenset[str]:
+    """Return normalized alphanumeric query terms with stop words removed."""
     return frozenset(
         word for word in re.findall(r"[a-z0-9]+", text.lower())
         if word not in _STOP_WORDS and len(word) > 1
@@ -162,6 +171,7 @@ def terms(text: str) -> frozenset[str]:
 
 
 def understand_query(query: str) -> QueryPlan:
+    """Infer query intent, exception requests, and evidence requirements deterministically."""
     normalized = query.strip()
     lowered = normalized.lower()
     asks_exceptions = bool(terms(lowered) & _EXCEPTION_TERMS) or bool(

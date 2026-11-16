@@ -1,3 +1,5 @@
+"""Score lexical and semantic support for query requirements across retrieved chunks."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
@@ -17,6 +19,7 @@ def requirement_score(
     semantic_similarity: float | None = None,
     topic_terms: frozenset[str] = frozenset(),
 ) -> float:
+    """Combine lexical and semantic evidence scores for one requirement and chunk."""
     if not requirement.terms:
         return 0.0
     content_terms = terms(chunk.content)
@@ -45,6 +48,7 @@ def aggregate_coverage(
     chunks: Iterable[Chunk],
     score_chunk: Callable[[Chunk], Mapping[str, float]],
 ) -> dict[str, float]:
+    """Keep each requirement?s highest score across a set of chunks."""
     scores = {requirement.id: 0.0 for requirement in plan.requirements}
     for chunk in chunks:
         for requirement_id, score in score_chunk(chunk).items():
@@ -57,6 +61,7 @@ def semantic_scores(
     chunk: Chunk,
     vectors: Mapping[str, tuple[float, ...]],
 ) -> dict[str, float]:
+    """Score a chunk against every query requirement using its embedding."""
     topic_terms = frozenset().union(
         *(requirement.terms for requirement in plan.requirements if requirement.id != "exceptions")
     )
@@ -72,6 +77,7 @@ def semantic_scores(
 
 
 def coverage_status(score: float) -> str:
+    """Map a numeric support score to sufficient, partial, or insufficient."""
     if score >= SUFFICIENT:
         return "sufficient"
     if score >= PARTIAL:

@@ -1,3 +1,5 @@
+"""Run retrieval baselines and collect their contexts and latency measurements."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -39,6 +41,7 @@ def run_baselines(
     config: PipelineConfig | None = None,
     pipeline: Isthmus | None = None,
 ) -> tuple[BaselineResult, ...]:
+    """Run top-k, window, graph, sector-routing, and document-selection retrieval baselines."""
     config = config or PipelineConfig()
     pipeline = pipeline or Isthmus(index, config)
     shared_started = perf_counter()
@@ -54,6 +57,7 @@ def run_baselines(
         started: float,
         extra_latency_ms: float = 0.0,
     ) -> None:
+        """Record one baseline?s context, document IDs, and shared-plus-local latency."""
         results.append(
             BaselineResult(
                 name=name,
@@ -161,6 +165,7 @@ def _fixed_window(
     hits: tuple[SearchHit, ...],
     window: int = 1,
 ) -> tuple[Chunk, ...]:
+    """Select each hit?s neighboring chunks within its document sequence."""
     by_document: dict[str, list[Chunk]] = defaultdict(list)
     for chunk in index.chunks.values():
         by_document[chunk.document_id].append(chunk)
@@ -183,6 +188,7 @@ def _fixed_window(
 
 
 def _group_hits(hits: tuple[SearchHit, ...]) -> dict[str, list[SearchHit]]:
+    """Group search hits by their document identifier."""
     grouped: dict[str, list[SearchHit]] = defaultdict(list)
     for hit in hits:
         grouped[hit.chunk.document_id].append(hit)
@@ -198,6 +204,7 @@ def _expand(
     similarity: Callable[[str, Chunk], float],
     index: InMemoryIndex,
 ) -> tuple[Chunk, ...]:
+    """Retrieve and cache graph evidence packages for the requested documents."""
     selected = {}
     for document_id in document_ids:
         package = package_cache.get(document_id)
@@ -215,4 +222,5 @@ def _expand(
 
 
 def _document_ids(chunks: tuple[Chunk, ...]) -> tuple[str, ...]:
+    """Return unique document IDs in the order they appear in the chunks."""
     return tuple(dict.fromkeys(chunk.document_id for chunk in chunks))

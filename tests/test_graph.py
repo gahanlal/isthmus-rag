@@ -1,3 +1,5 @@
+"""Test bounded graph traversal, relationship handling, and evidence deduplication."""
+
 from dataclasses import replace
 
 from isthmus.graph import AdaptiveGraphRetriever, TraversalConfig
@@ -12,6 +14,7 @@ from isthmus.models import (
 
 
 def setup_graph(scores, edges, document_id="doc"):
+    """Build a graph fixture and return its chunks, edges, and retriever."""
     chunks = [
         Chunk(
             id=chunk_id,
@@ -54,6 +57,7 @@ def setup_graph(scores, edges, document_id="doc"):
 
 
 def sequential_edges(ids):
+    """Create forward and backward relationships between consecutive chunks."""
     edges = []
     for left, right in zip(ids, ids[1:]):
         edges.extend([
@@ -64,6 +68,7 @@ def sequential_edges(ids):
 
 
 def test_bidirectional_expansion_and_low_similarity_bridge():
+    """Verify that bidirectional expansion and low similarity bridge."""
     scores = [("a", 0.9), ("seed", 0.95), ("bridge", 0.2), ("answer", 0.85)]
     retriever, plan, hits = setup_graph(scores, sequential_edges(["a", "seed", "bridge", "answer"]))
     evidence = retriever.retrieve("doc", plan, hits)
@@ -74,6 +79,7 @@ def test_bidirectional_expansion_and_low_similarity_bridge():
 
 
 def test_multiple_seeds_are_deduplicated_and_cycles_terminate():
+    """Verify that multiple seeds are deduplicated and cycles terminate."""
     scores = [("seed", 0.95), ("other", 0.91)]
     edges = [
         Relationship("seed", "other", RelationshipType.NEXT),
@@ -87,6 +93,7 @@ def test_multiple_seeds_are_deduplicated_and_cycles_terminate():
 
 
 def test_all_global_hits_seed_expansion_by_default():
+    """Verify that all global hits seed expansion by default."""
     scores = [(f"seed-{number}", 0.95 - number / 100) for number in range(5)]
     chunks = [
         Chunk(chunk_id, "doc", "sector", f"chunk {chunk_id}", number, token_count=1)
@@ -116,6 +123,7 @@ def test_all_global_hits_seed_expansion_by_default():
 
 
 def test_each_seed_gets_its_own_directional_expansion_budget():
+    """Verify that each seed gets its own directional expansion budget."""
     seed_ids = [f"seed-{number}" for number in range(5)]
     neighbor_ids = ["neighbor-0a", "neighbor-0b", "neighbor-1", "neighbor-2", "neighbor-3", "neighbor-4"]
     chunks = [
@@ -170,6 +178,7 @@ def test_each_seed_gets_its_own_directional_expansion_budget():
 
 
 def test_rejected_edge_does_not_consume_directional_expansion_budget():
+    """Verify that rejected edge does not consume directional expansion budget."""
     chunks = [
         Chunk("seed", "doc", "sector", "seed", 1, token_count=1),
         Chunk("rejected", "doc", "sector", "rejected", 2, token_count=1),
@@ -210,6 +219,7 @@ def test_rejected_edge_does_not_consume_directional_expansion_budget():
 
 
 def test_overlapping_seed_paths_traverse_bridges_but_deduplicate_evidence():
+    """Verify that overlapping seed paths traverse bridges but deduplicate evidence."""
     chunks = [
         Chunk("seed-0", "doc", "sector", "seed 0", 1, token_count=1),
         Chunk("seed-1", "doc", "sector", "seed 1", 2, token_count=1),
@@ -262,6 +272,7 @@ def test_overlapping_seed_paths_traverse_bridges_but_deduplicate_evidence():
 
 
 def test_max_nodes_remains_a_document_wide_cap_after_seeds_are_processed():
+    """Verify that max nodes remains a document wide cap after seeds are processed."""
     seed_ids = [f"seed-{number}" for number in range(5)]
     chunks = [
         Chunk(chunk_id, "doc", "sector", chunk_id, number, token_count=1)
@@ -292,6 +303,7 @@ def test_max_nodes_remains_a_document_wide_cap_after_seeds_are_processed():
 
 
 def test_traversal_never_crosses_document_boundary():
+    """Verify that traversal never crosses document boundary."""
     chunks = [
         Chunk("seed", "doc", "sector", "seed policy", 1, token_count=1),
         Chunk("foreign", "other-doc", "sector", "foreign policy", 2, token_count=1),
@@ -314,6 +326,7 @@ def test_traversal_never_crosses_document_boundary():
 
 
 def test_qualifies_relationship_is_followed_for_exception_queries():
+    """Verify that qualifies relationship is followed for exception queries."""
     scores = [("seed", 0.9), ("exception", 0.8)]
     retriever, plan, hits = setup_graph(
         scores,
@@ -325,6 +338,7 @@ def test_qualifies_relationship_is_followed_for_exception_queries():
 
 
 def test_low_similarity_qualifier_is_included_below_the_normal_threshold():
+    """Verify that low similarity qualifier is included below the normal threshold."""
     scores = [("seed", 0.9), ("exception", 0.5)]
     retriever, plan, hits = setup_graph(
         scores,
@@ -338,6 +352,7 @@ def test_low_similarity_qualifier_is_included_below_the_normal_threshold():
 
 
 def test_qualifier_below_its_own_threshold_is_not_traversed():
+    """Verify that qualifier below its own threshold is not traversed."""
     scores = [("seed", 0.9), ("exception", 0.4)]
     retriever, plan, hits = setup_graph(
         scores,
@@ -350,6 +365,7 @@ def test_qualifier_below_its_own_threshold_is_not_traversed():
 
 
 def test_non_exception_queries_do_not_follow_qualifies_relationships():
+    """Verify that non exception queries do not follow qualifies relationships."""
     scores = [("seed", 0.9), ("exception", 0.8)]
     retriever, plan, hits = setup_graph(
         scores,
@@ -366,6 +382,7 @@ def test_non_exception_queries_do_not_follow_qualifies_relationships():
 
 
 def test_qualifies_edge_is_followed_from_a_sequentially_reached_chunk():
+    """Verify that qualifies edge is followed from a sequentially reached chunk."""
     scores = [("seed", 0.9), ("rule", 0.9), ("exception", 0.5)]
     edges = sequential_edges(["seed", "rule"])
     edges.append(Relationship("rule", "exception", RelationshipType.QUALIFIES))
@@ -382,6 +399,7 @@ def test_qualifies_edge_is_followed_from_a_sequentially_reached_chunk():
 
 
 def test_node_limit_is_respected():
+    """Verify that node limit is respected."""
     scores = [(f"c{number}", 0.9) for number in range(8)]
     retriever, plan, hits = setup_graph(scores, sequential_edges([item[0] for item in scores]))
     retriever.config = TraversalConfig(max_nodes=3, max_depth=10, max_forward=20, max_backward=20)
@@ -390,6 +408,7 @@ def test_node_limit_is_respected():
 
 
 def test_similarity_is_computed_once_per_chunk_per_retrieval():
+    """Verify that similarity is computed once per chunk per retrieval."""
     scores = [("seed", 0.95), ("bridge", 0.2), ("answer", 0.85)]
     retriever, plan, hits = setup_graph(
         scores,
@@ -399,6 +418,7 @@ def test_similarity_is_computed_once_per_chunk_per_retrieval():
     calls = {}
 
     def counted_similarity(query, chunk):
+        """Count similarity calls before delegating to the test scorer."""
         calls[chunk.id] = calls.get(chunk.id, 0) + 1
         return original_similarity(query, chunk)
 

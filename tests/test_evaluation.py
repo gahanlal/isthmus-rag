@@ -1,3 +1,5 @@
+"""Test evaluation dataset loading, baseline execution, and index-label validation."""
+
 from io import StringIO
 import json
 
@@ -10,6 +12,7 @@ from conftest import FakeEmbeddingProvider
 
 
 def test_dataset_loader_parses_evidence_and_requirement_labels():
+    """Verify that dataset loader parses evidence and requirement labels."""
     dataset = load_dataset_stream(
         StringIO(
             json.dumps(
@@ -33,6 +36,7 @@ def test_dataset_loader_parses_evidence_and_requirement_labels():
 
 
 def test_evaluation_runs_all_five_retrieval_baselines():
+    """Verify that evaluation runs all five retrieval baselines."""
     index, cases = build_sample_evaluation(FakeEmbeddingProvider())
 
     report = evaluate_dataset(index, cases)
@@ -50,6 +54,7 @@ def test_evaluation_runs_all_five_retrieval_baselines():
 
 
 def test_dataset_loader_rejects_missing_gold_evidence():
+    """Verify that dataset loader rejects missing gold evidence."""
     with pytest.raises(ValueError, match="evidence_chunk_ids"):
         load_dataset_stream(
             StringIO(
@@ -65,6 +70,7 @@ def test_dataset_loader_rejects_missing_gold_evidence():
 
 
 def test_evaluation_rejects_labels_not_in_index():
+    """Verify that evaluation rejects labels not in index."""
     index, cases = build_sample_evaluation(FakeEmbeddingProvider())
     from dataclasses import replace
 

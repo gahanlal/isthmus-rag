@@ -1,3 +1,5 @@
+"""Run the sample or configured retrieval evaluation from the command line."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,6 +17,7 @@ from isthmus.pipeline import PipelineConfig
 
 
 def main() -> None:
+    """Run the sample evaluation or evaluate a dataset against a configured index."""
     parser = argparse.ArgumentParser(prog="isthmus-evaluate")
     parser.add_argument("--demo", action="store_true")
     parser.add_argument("--database")

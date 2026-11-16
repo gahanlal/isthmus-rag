@@ -1,3 +1,5 @@
+"""Calculate evidence, context, document, and latency metrics for a retrieval case."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,6 +29,7 @@ def score_case(
     case: EvaluationCase,
     result: BaselineResult,
 ) -> CaseMetrics:
+    """Calculate evidence, requirement, document, context-size, and latency metrics for a baseline."""
     retrieved_chunks = {chunk.id for chunk in result.chunks}
     retrieved_documents = set(result.document_ids)
     evidence_recall = _recall(case.evidence_chunk_ids, retrieved_chunks)
@@ -73,4 +76,5 @@ def score_case(
 
 
 def _recall(expected: frozenset[str], actual: set[str]) -> float:
+    """Return the fraction of expected identifiers found in the retrieved set."""
     return len(expected & actual) / len(expected) if expected else 0.0

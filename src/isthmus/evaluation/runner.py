@@ -1,3 +1,5 @@
+"""Evaluate retrieval baselines over labeled cases and summarize their metrics."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -18,6 +20,7 @@ class EvaluationReport:
     summary: dict[str, dict[str, float | None]]
 
     def to_dict(self) -> dict[str, object]:
+        """Serialize the report and its per-case metrics into JSON-compatible values."""
         return {
             "case_count": self.case_count,
             "summary": self.summary,
@@ -30,6 +33,7 @@ def evaluate_dataset(
     cases: tuple[EvaluationCase, ...],
     config: PipelineConfig | None = None,
 ) -> EvaluationReport:
+    """Validate labels, run all baselines for each case, and summarize the resulting metrics."""
     if not cases:
         raise ValueError("evaluation dataset contains no cases")
     for case in cases:
@@ -58,6 +62,7 @@ def evaluate_dataset(
 def _summarize(
     rows: list[CaseMetrics],
 ) -> dict[str, dict[str, float | None]]:
+    """Average each available metric by baseline."""
     by_baseline: dict[str, list[CaseMetrics]] = defaultdict(list)
     for row in rows:
         by_baseline[row.baseline].append(row)

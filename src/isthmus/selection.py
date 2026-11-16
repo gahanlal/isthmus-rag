@@ -1,3 +1,5 @@
+"""Rank sectors and documents and choose evidence packages for retrieval queries."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -35,11 +37,12 @@ class SectorSelector(Protocol):
         query: str,
         scores: dict[str, float],
         heuristic_sectors: tuple[str, ...],
-    ) -> tuple[str, ...]: ...
+    ) -> tuple[str, ...]: """Define the interface for selecting sectors using query relevance scores."""; ...
 
 
 class LLMSectorSelector:
     def __init__(self, complete: Callable[[str], str]) -> None:
+        """Store the completion callback used for sector selection."""
         self.complete = complete
 
     def select(
@@ -48,6 +51,7 @@ class LLMSectorSelector:
         scores: dict[str, float],
         heuristic_sectors: tuple[str, ...],
     ) -> tuple[str, ...]:
+        """Ask the model to choose valid candidate sectors and validate its response."""
         if not scores:
             return ()
         payload = {
@@ -83,6 +87,7 @@ class LLMSectorSelector:
 
 
 def score_sectors(hits: Iterable[SearchHit]) -> dict[str, float]:
+    """Rank sectors using their strongest hit scores and document coverage."""
     by_sector: dict[str, list[SearchHit]] = defaultdict(list)
     for hit in hits:
         by_sector[hit.chunk.sector_id].append(hit)
@@ -102,6 +107,7 @@ def select_sectors(
     threshold: float = 0.75,
     fallback_margin: float = 0.10,
 ) -> tuple[str, ...]:
+    """Select sectors above the threshold and nearby fallback candidates."""
     selected = [sector for sector, score in scores.items() if score >= threshold]
     near_threshold = [
         sector for sector, score in scores.items()
@@ -118,6 +124,7 @@ def discover_documents(
     selected_sector_ids: Iterable[str],
     limit: int = 5,
 ) -> tuple[str, ...]:
+    """Rank documents with hits in selected sectors and return the top IDs."""
     sectors = set(selected_sector_ids)
     by_document: dict[str, list[SearchHit]] = defaultdict(list)
     for hit in hits:

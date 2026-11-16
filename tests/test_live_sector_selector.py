@@ -1,3 +1,5 @@
+"""Exercise live model-based sector selection against the configured API."""
+
 import os
 
 import pytest
@@ -11,6 +13,7 @@ from isthmus.query import sector_selector_from_environment
     reason="set ISTHMUS_RUN_LIVE_LLM_TESTS=1 to run the real GPT-4o-mini integration test",
 )
 def test_live_gpt_4o_mini_sector_selection():
+    """Verify that live gpt 4o mini sector selection."""
     load_dotenv()
     selector = sector_selector_from_environment(enabled=True)
     sector_scores = {

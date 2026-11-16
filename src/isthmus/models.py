@@ -1,3 +1,5 @@
+"""Define the immutable data models used by indexing, retrieval, and evaluation."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -42,6 +44,7 @@ class Chunk:
     content_hash: str = ""
 
     def __post_init__(self) -> None:
+        """Set the chunk token count from its content when no count was provided."""
         if self.token_count == 0:
             object.__setattr__(self, "token_count", len(self.content.split()))
 

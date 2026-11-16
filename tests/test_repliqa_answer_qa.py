@@ -1,3 +1,5 @@
+"""Test RepLiQA answerability labels, passage metrics, answer QA, and progress persistence."""
+
 import csv
 import json
 import os
@@ -21,6 +23,7 @@ from evaluation.repliqa_answer_qa import (
 
 
 def _row(question_id, topic, answer):
+    """Create a RepLiQA fixture row with the supplied question and labels."""
     return {
         "document_id": f"doc-{topic}",
         "document_topic": topic,
@@ -38,6 +41,7 @@ def _row(question_id, topic, answer):
 
 
 def test_stratified_sample_is_deterministic_and_preserves_topic_answerability():
+    """Verify that stratified sample is deterministic and preserves topic answerability."""
     rows = [
         _row(f"{topic}-{answerable}-{number}", topic, "Answer" if answerable else "UNANSWERABLE")
         for topic in ("policy", "news")
@@ -60,6 +64,7 @@ def test_stratified_sample_is_deterministic_and_preserves_topic_answerability():
 
 
 def test_stratified_sample_uses_long_answer_na_for_unanswerable_labels():
+    """Verify that stratified sample uses long answer na for unanswerable labels."""
     rows = []
     for topic in ("policy", "news"):
         for answerable in (True, False):
@@ -83,6 +88,7 @@ def test_stratified_sample_uses_long_answer_na_for_unanswerable_labels():
 
 
 def test_huggingface_token_uses_hf_api_without_overwriting_hf_token(monkeypatch):
+    """Verify that huggingface token uses hf api without overwriting hf token."""
     monkeypatch.setenv("HF_API", "inference-token")
     monkeypatch.delenv("HF_TOKEN", raising=False)
 
@@ -95,6 +101,7 @@ def test_huggingface_token_uses_hf_api_without_overwriting_hf_token(monkeypatch)
 
 
 def test_answerability_counts_use_dataset_rows():
+    """Verify that answerability counts use dataset rows."""
     rows = [
         _row("q1", "policy", "Expected answer"),
         _row("q2", "policy", "UNANSWERABLE"),
@@ -107,6 +114,7 @@ def test_answerability_counts_use_dataset_rows():
 
 
 def test_long_answer_na_marks_the_replica_question_unanswerable():
+    """Verify that long answer na marks the replica question unanswerable."""
     row = _row("q1", "policy", "UNANSWERABLE")
     row["answer"] = "Dataset answer value"
     row["long_answer"] = "NA"
@@ -115,6 +123,7 @@ def test_long_answer_na_marks_the_replica_question_unanswerable():
 
 
 def test_report_correction_excludes_invalid_unanswerable_judgments():
+    """Verify that report correction excludes invalid unanswerable judgments."""
     row = _row("q1", "policy", "Dataset answer value")
     row["long_answer"] = "NA"
     answer = {
@@ -187,6 +196,7 @@ def test_report_correction_excludes_invalid_unanswerable_judgments():
 
 
 def test_validate_rows_requires_five_questions_per_consistent_document():
+    """Verify that validate rows requires five questions per consistent document."""
     rows = [_row(f"q{number}", "policy", "Answer") for number in range(5)]
 
     assert validate_rows(rows)["doc-policy"]["topic"] == "policy"
@@ -195,6 +205,7 @@ def test_validate_rows_requires_five_questions_per_consistent_document():
 
 
 def test_passage_metrics_recognize_evidence_split_across_chunks():
+    """Verify that passage metrics recognize evidence split across chunks."""
     row = _row("q1", "policy", "Answer")
     chunks = (
         Chunk("c1", "doc", "policy", "The answer is in this", 1),
@@ -211,6 +222,7 @@ def test_passage_metrics_recognize_evidence_split_across_chunks():
 
 
 def test_invalid_passage_label_is_not_scored_as_retrieval_miss():
+    """Verify that invalid passage label is not scored as retrieval miss."""
     row = _row("q1", "policy", "Answer")
 
     metrics = _passage_metrics(row, (), "Different source text.")
@@ -221,6 +233,7 @@ def test_invalid_passage_label_is_not_scored_as_retrieval_miss():
 
 
 def test_unanswerable_reference_and_sanitized_citations():
+    """Verify that unanswerable reference and sanitized citations."""
     answer = {
         "text": "The document does not say.",
         "cited_evidence": [{
@@ -240,6 +253,7 @@ def test_unanswerable_reference_and_sanitized_citations():
 
 
 def test_human_review_csv_pairs_generated_and_expected_answers(tmp_path):
+    """Verify that human review csv pairs generated and expected answers."""
     row = _row("q1", "policy", "Expected answer")
     answer = {
         "text": "Generated answer",
@@ -276,6 +290,7 @@ def test_human_review_csv_pairs_generated_and_expected_answers(tmp_path):
 
 
 def test_answer_progress_persists_partial_arm_results(tmp_path):
+    """Verify that answer progress persists partial arm results."""
     row = _row("q1", "policy", "Expected answer")
     in_progress = {
         "question_id": "q1",

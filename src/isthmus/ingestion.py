@@ -1,3 +1,5 @@
+"""Extract PDF text, split it into chunks, and derive source identities and relationships."""
+
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +34,7 @@ _QUALIFIER_PATTERN = re.compile(
 
 
 def _require_sector(sector_id: str) -> None:
+    """Reject missing or blank sector identifiers."""
     if not isinstance(sector_id, str) or not sector_id.strip():
         raise ValueError("An explicit non-empty sector is required.")
 
@@ -83,6 +86,7 @@ def _qualifies_relationships(chunks: list[Chunk]) -> tuple[Relationship, ...]:
 
 
 def _source_identity(stream: BinaryIO) -> tuple[str, str]:
+    """Hash the full source stream and return stable document and revision IDs."""
     digest = hashlib.sha256()
     for block in iter(lambda: stream.read(1024 * 1024), b""):
         digest.update(block)
@@ -98,6 +102,7 @@ def parse_pdf(
     *,
     embedding_provider: EmbeddingProvider | None = None,
 ) -> tuple[Document, tuple[Chunk, ...], tuple[Relationship, ...]]:
+    """Read a PDF file and return its document, text chunks, and relationships."""
     pdf_path = Path(path)
     with pdf_path.open("rb") as stream:
         return _parse_pdf_stream(stream, pdf_path, sector_id, max_words_per_chunk, embedding_provider)
@@ -111,6 +116,7 @@ def parse_pdf_bytes(
     *,
     embedding_provider: EmbeddingProvider | None = None,
 ) -> tuple[Document, tuple[Chunk, ...], tuple[Relationship, ...]]:
+    """Parse in-memory PDF bytes into a document, chunks, and relationships."""
     return _parse_pdf_stream(
         BytesIO(content),
         Path(filename),
@@ -127,6 +133,7 @@ def _parse_pdf_stream(
     max_words_per_chunk: int,
     embedding_provider: EmbeddingProvider | None,
 ) -> tuple[Document, tuple[Chunk, ...], tuple[Relationship, ...]]:
+    """Extract PDF page text, split it into chunks, and connect sequential or qualifying chunks."""
     if max_words_per_chunk < 1:
         raise ValueError("max_words_per_chunk must be positive")
     _require_sector(sector_id)
@@ -190,6 +197,7 @@ def _split_text(
     max_words: int,
     budget: tuple[Callable[[str], int], int] | None = None,
 ) -> tuple[str, ...]:
+    """Split normalized paragraphs into word-limited and optionally token-limited pieces."""
     paragraphs = [
         re.sub(r"\s+", " ", paragraph).strip()
         for paragraph in re.split(r"\n\s*\n", text)
@@ -200,6 +208,7 @@ def _split_text(
     current_words = 0
 
     def flush() -> None:
+        """Append the current word-bounded segment and reset the pending words."""
         nonlocal current, current_words
         if current:
             result.append(" ".join(current))
@@ -235,6 +244,7 @@ def _split_text(
 
 
 def _split_to_token_limit(text: str, counter: Callable[[str], int], maximum: int) -> tuple[str, ...]:
+    """Split text further so each part stays within the provider token limit."""
     result = []
     remaining = text
     while remaining:

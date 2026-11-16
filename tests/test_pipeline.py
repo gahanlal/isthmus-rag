@@ -1,3 +1,5 @@
+"""Test end-to-end retrieval orchestration, caching, selection, and context assembly."""
+
 from conftest import FakeEmbeddingProvider
 from isthmus.index import InMemoryIndex
 from isthmus.models import Chunk, Document, EvidencePackage, QueryPlan, QueryRequirement, Relationship, RelationshipType, SearchHit
@@ -6,14 +8,17 @@ from isthmus.pipeline import Isthmus, PipelineConfig
 
 class CountingEmbeddingProvider:
     def __init__(self):
+        """Initialize the embedding fixture and its call counter."""
         self.calls = 0
 
     def embed(self, _text):
+        """Count the request and return a deterministic embedding."""
         self.calls += 1
         return (1.0, 0.0)
 
 
 def test_pipeline_expands_every_candidate_before_returning_document_scores():
+    """Verify that pipeline expands every candidate before returning document scores."""
     embeddings = FakeEmbeddingProvider()
     index = InMemoryIndex(embeddings)
     for doc_id, sector, content in [
@@ -36,6 +41,7 @@ def test_pipeline_expands_every_candidate_before_returning_document_scores():
 
 
 def test_pipeline_embeds_query_once_for_search_and_graph_expansion():
+    """Verify that pipeline embeds query once for search and graph expansion."""
     embeddings = CountingEmbeddingProvider()
     index = InMemoryIndex(embeddings)
     document = Document("doc", "Document", "sector")
@@ -58,6 +64,7 @@ def test_pipeline_embeds_query_once_for_search_and_graph_expansion():
 
 
 def test_pipeline_uses_llm_sector_choice_alongside_semantic_scores():
+    """Verify that pipeline uses llm sector choice alongside semantic scores."""
     index = InMemoryIndex(CountingEmbeddingProvider())
     index.add_document(
         Document("finance-doc", "Finance policy", "finance"),
@@ -71,6 +78,7 @@ def test_pipeline_uses_llm_sector_choice_alongside_semantic_scores():
 
     class Selector:
         def select(self, query, scores, heuristic_sectors):
+            """Return the test selector?s configured sector choice."""
             observed.update(
                 query=query,
                 scores=scores,
@@ -92,6 +100,7 @@ def test_pipeline_uses_llm_sector_choice_alongside_semantic_scores():
 
 
 def test_pipeline_reuses_graph_structure_until_index_changes():
+    """Verify that pipeline reuses graph structure until index changes."""
     index = InMemoryIndex(CountingEmbeddingProvider())
     pipeline = Isthmus(index)
 
@@ -108,6 +117,7 @@ def test_pipeline_reuses_graph_structure_until_index_changes():
 
 
 def test_pipeline_expands_bounded_fallback_candidates_when_evidence_is_incomplete():
+    """Verify that pipeline expands bounded fallback candidates when evidence is incomplete."""
     index = InMemoryIndex(CountingEmbeddingProvider())
     main = Chunk("main", "a", "sector", "travel reimbursement policy", 1)
     exception = Chunk("exception", "b", "sector", "travel reimbursement exceptions require approval", 1)
@@ -127,6 +137,7 @@ def test_pipeline_expands_bounded_fallback_candidates_when_evidence_is_incomplet
 
 
 def test_low_similarity_qualifier_survives_through_final_context():
+    """Verify that low similarity qualifier survives through final context."""
     index = InMemoryIndex(FakeEmbeddingProvider())
     query = "What does this policy cover?"
     rule = Chunk(
@@ -153,6 +164,7 @@ def test_low_similarity_qualifier_survives_through_final_context():
 
     class Planner:
         def plan(self, _query):
+            """Return a query plan for the supplied question."""
             return QueryPlan(
                 query,
                 "factual",
@@ -178,6 +190,7 @@ def test_low_similarity_qualifier_survives_through_final_context():
 
 
 def test_pipeline_does_not_treat_one_term_as_complete_evidence():
+    """Verify that pipeline does not treat one term as complete evidence."""
     index = InMemoryIndex(CountingEmbeddingProvider())
     index.add_document(
         Document("doc", "Policy", "sector"),
@@ -189,6 +202,7 @@ def test_pipeline_does_not_treat_one_term_as_complete_evidence():
 
 
 def test_context_budget_prioritizes_unique_requirement_evidence():
+    """Verify that context budget prioritizes unique requirement evidence."""
     index = InMemoryIndex(CountingEmbeddingProvider())
     chunks = [
         Chunk("main", "a", "sector", "main", 1, token_count=5),
@@ -198,6 +212,7 @@ def test_context_budget_prioritizes_unique_requirement_evidence():
     index.add_document(Document("a", "A", "sector"), chunks[:2])
     index.add_document(Document("b", "B", "sector"), chunks[2:])
     def package(doc_id, ids):
+        """Build an evidence package for the supplied document and requirement scores."""
         return EvidencePackage(doc_id, (), (), ids, {}, (), (), frozenset(), 0, "")
     plan = QueryPlan("question", "factual", (
         QueryRequirement("main", "main", frozenset({"main"})),

@@ -1,3 +1,5 @@
+"""Parse supported document formats into provenance-aware chunks and relationships."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -43,6 +45,7 @@ def parse_document_bytes(
     *,
     embedding_provider: EmbeddingProvider | None = None,
 ) -> tuple[Document, tuple[Chunk, ...], tuple[Relationship, ...]]:
+    """Parse supported file bytes into a document, chunks, and structural relationships."""
     path = Path(filename)
     suffix = path.suffix.casefold()
     if max_words_per_chunk < 1:
@@ -104,6 +107,7 @@ def parse_document_bytes(
 
 
 def _text_blocks(text: str, *, markdown: bool) -> Iterable[_Block]:
+    """Yield text and Markdown paragraphs and headings with line locations."""
     headings: list[str] = []
     paragraph: list[str] = []
     start = 1
@@ -127,6 +131,7 @@ def _text_blocks(text: str, *, markdown: bool) -> Iterable[_Block]:
 
 
 def _docx_blocks(content: bytes) -> Iterable[_Block]:
+    """Yield DOCX paragraphs and table rows with heading paths and block locations."""
     document = DocxDocument(BytesIO(content))
     headings: list[str] = []
     for position, item in enumerate(document.iter_inner_content(), start=1):
@@ -150,6 +155,7 @@ def _docx_blocks(content: bytes) -> Iterable[_Block]:
 
 
 def _pptx_blocks(content: bytes) -> Iterable[_Block]:
+    """Yield PowerPoint slide text and table rows with slide and shape locations."""
     presentation = Presentation(BytesIO(content))
     for slide_number, slide in enumerate(presentation.slides, start=1):
         headings = (slide.shapes.title.text.strip(),) if slide.shapes.title and slide.shapes.title.text.strip() else ()
@@ -163,6 +169,7 @@ def _pptx_blocks(content: bytes) -> Iterable[_Block]:
 
 
 def _xlsx_blocks(content: bytes) -> Iterable[_Block]:
+    """Yield non-empty spreadsheet rows with worksheet and row locations."""
     workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
     try:
         for sheet in workbook.worksheets:

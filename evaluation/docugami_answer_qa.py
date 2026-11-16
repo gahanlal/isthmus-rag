@@ -39,6 +39,7 @@ _JUDGE_SYSTEM = (
 
 
 def load_passage_labels(path: Path) -> list[dict]:
+    """Load and validate the labeled passage cases from a JSON file."""
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != 1 or not isinstance(data.get("cases"), list):
         raise ValueError("Passage labels must use schema_version 1 and contain cases.")
@@ -55,6 +56,7 @@ def load_passage_labels(path: Path) -> list[dict]:
 
 
 def load_reference_pages(data_dir: Path, case: dict) -> list[dict]:
+    """Extract labeled reference pages from their source PDFs."""
     pages = []
     for reference in case["evidence_pages"]:
         path = data_dir / Path(reference["path"])
@@ -80,6 +82,7 @@ def _generate_qa_answer(
     documents: dict[str, Document],
     provider: OpenAIAnswerProvider,
 ) -> dict:
+    """Generate an answer and record its cited retrieved evidence and citation validity."""
     if not result.context:
         return {
             "text": "Insufficient evidence to answer the question.",
@@ -158,6 +161,7 @@ def _judge_answers(
     reference_pages: list[dict],
     answers: dict[str, dict],
 ) -> dict:
+    """Blindly score each answer for correctness, completeness, and citation support."""
     labels = tuple(answers)
     prompt = json.dumps(
         {
@@ -217,6 +221,7 @@ def _judge_answers(
 
 
 def _summary(cases: list[dict]) -> dict:
+    """Aggregate answer QA scores, failures, citation issues, and pairwise outcomes."""
     judged = [case for case in cases if case.get("judge")]
     arms = ("top_k", "fixed_target", "marginal_coverage")
     summary = {"judged_cases": len(judged), "answer_failures": 0}
@@ -261,6 +266,7 @@ def _summary(cases: list[dict]) -> dict:
 
 
 def main() -> None:
+    """Run size-matched answer generation and blinded judging for the configured benchmark."""
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, required=True)

@@ -1,3 +1,5 @@
+"""Check that the distributed sample corpus matches its labeled evaluation cases."""
+
 from pathlib import Path
 
 from isthmus.document_parsing import parse_document_bytes
@@ -8,6 +10,7 @@ from conftest import FakeEmbeddingProvider
 
 
 def test_sample_labels_match_the_distributed_documents():
+    """Verify that sample labels match the distributed documents."""
     root = Path(__file__).resolve().parents[1] / "sample_data"
     index = InMemoryIndex(FakeEmbeddingProvider())
     for path in (root / "travel-policy.txt", root / "expense-security.txt"):

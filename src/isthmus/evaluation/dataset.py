@@ -1,3 +1,5 @@
+"""Load and validate JSON Lines retrieval evaluation cases."""
+
 from __future__ import annotations
 
 import json
@@ -17,11 +19,13 @@ class EvaluationCase:
 
 
 def load_dataset(path: str | Path) -> tuple[EvaluationCase, ...]:
+    """Open a JSONL dataset file and parse its evaluation cases."""
     with Path(path).open(encoding="utf-8") as stream:
         return load_dataset_stream(stream)
 
 
 def load_dataset_stream(stream: TextIO) -> tuple[EvaluationCase, ...]:
+    """Validate each JSONL case and reject duplicate IDs or an empty dataset."""
     cases = []
     seen_ids = set()
     for line_number, line in enumerate(stream, start=1):
@@ -44,6 +48,7 @@ def load_dataset_stream(stream: TextIO) -> tuple[EvaluationCase, ...]:
 
 
 def _case_from_mapping(data: object) -> EvaluationCase:
+    """Validate one JSON object and convert it to an evaluation case."""
     if not isinstance(data, dict):
         raise TypeError("each JSONL line must be an object")
     case_id = data["id"]
@@ -81,6 +86,7 @@ def _case_from_mapping(data: object) -> EvaluationCase:
 
 
 def _string_set(value: object, field_name: str) -> frozenset[str]:
+    """Validate a list of non-empty strings and return its unique values."""
     if not isinstance(value, list) or not all(
         isinstance(item, str) and item.strip() for item in value
     ):

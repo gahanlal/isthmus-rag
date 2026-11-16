@@ -1,3 +1,5 @@
+"""Test the FastAPI document, sector, and query workflows."""
+
 from fastapi.testclient import TestClient
 
 from isthmus.api import app
@@ -5,6 +7,7 @@ from conftest import FakeEmbeddingProvider
 
 
 def test_document_and_query_workflow(tmp_path, monkeypatch):
+    """Verify that document and query workflow."""
     monkeypatch.setenv("ISTHMUS_EMBEDDING_MODEL", "test")
     monkeypatch.setattr("isthmus.api.OpenAIEmbeddingProvider", lambda **kwargs: FakeEmbeddingProvider())
     monkeypatch.setattr("isthmus.api.sector_selector_from_environment", lambda: None)
@@ -27,6 +30,7 @@ def test_document_and_query_workflow(tmp_path, monkeypatch):
 
 
 def test_upload_requires_existing_sector(tmp_path, monkeypatch):
+    """Verify that upload requires existing sector."""
     monkeypatch.setenv("ISTHMUS_EMBEDDING_MODEL", "test")
     monkeypatch.setattr("isthmus.api.OpenAIEmbeddingProvider", lambda **kwargs: FakeEmbeddingProvider())
     monkeypatch.setenv("ISTHMUS_DATABASE", str(tmp_path / "test.db"))

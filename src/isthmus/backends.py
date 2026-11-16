@@ -1,3 +1,5 @@
+"""Open the configured persistent index backend."""
+
 from __future__ import annotations
 
 from importlib import import_module

@@ -1,3 +1,5 @@
+"""Test the Docugami benchmark metrics, size matching, answer QA, and comparators."""
+
 import importlib.util
 import json
 from pathlib import Path
@@ -28,6 +30,7 @@ answer_qa_spec.loader.exec_module(answer_qa)
 
 
 def test_document_metrics_include_missing_and_extra_sources():
+    """Verify that document metrics include missing and extra sources."""
     scores = benchmark.document_metrics({"a", "b"}, {"a", "c"})
     assert scores == {
         "precision": 0.5,
@@ -41,6 +44,7 @@ def test_document_metrics_include_missing_and_extra_sources():
 
 
 def test_comparison_applies_the_same_word_budget_to_baselines():
+    """Verify that comparison applies the same word budget to baselines."""
     chunks = [
         Chunk("a", "a", "sector", "one", 1, token_count=4),
         Chunk("b", "b", "sector", "two", 2, token_count=5),
@@ -50,6 +54,7 @@ def test_comparison_applies_the_same_word_budget_to_baselines():
 
 
 def test_size_matching_truncates_all_contexts_to_equal_word_counts():
+    """Verify that size matching truncates all contexts to equal word counts."""
     top_k = [
         Chunk("a", "doc-a", "sector", "one two three four", 1, token_count=4),
     ]
@@ -74,6 +79,7 @@ def test_size_matching_truncates_all_contexts_to_equal_word_counts():
 
 
 def test_passage_labels_include_page_level_facts():
+    """Verify that passage labels include page level facts."""
     labels_path = path.with_name("docugami_passage_labels.json")
     labels = answer_qa.load_passage_labels(labels_path)
 
@@ -87,6 +93,7 @@ def test_passage_labels_include_page_level_facts():
 
 
 def test_answer_qa_summary_averages_blinded_judge_scores_by_arm():
+    """Verify that answer qa summary averages blinded judge scores by arm."""
     cases = [
         {
             "arms": {
@@ -125,8 +132,10 @@ def test_answer_qa_summary_averages_blinded_judge_scores_by_arm():
 
 
 def test_answer_qa_keeps_uncited_drafts_for_grounding_judgment():
+    """Verify that answer qa keeps uncited drafts for grounding judgment."""
     class FakeProvider:
         def generate(self, prompt):
+            """Return the configured fake answer."""
             assert json.loads(prompt)["evidence"]
             return '{"answer":"The policy reimburses the expense."}'
 
@@ -145,6 +154,7 @@ def test_answer_qa_keeps_uncited_drafts_for_grounding_judgment():
 
 
 def test_hybrid_search_combines_lexical_and_dense_candidates():
+    """Verify that hybrid search combines lexical and dense candidates."""
     chunks = [
         Chunk("dense", "a", "sector", "unrelated text", 1),
         Chunk("keyword", "b", "sector", "contractor reimbursement policy", 1),
@@ -155,6 +165,7 @@ def test_hybrid_search_combines_lexical_and_dense_candidates():
 
 
 def test_page_merging_only_expands_pages_with_enough_matches():
+    """Verify that page merging only expands pages with enough matches."""
     chunks = [
         Chunk("a", "doc", "sector", "a", 1, source_location="page 1"),
         Chunk("b", "doc", "sector", "b", 2, source_location="page 1"),
@@ -167,6 +178,7 @@ def test_page_merging_only_expands_pages_with_enough_matches():
 
 
 def test_cross_encoder_reranks_question_passage_pairs():
+    """Verify that cross encoder reranks question passage pairs."""
     class Encoding:
         ids = [1, 2]
         attention_mask = [1, 1]
@@ -174,14 +186,17 @@ def test_cross_encoder_reranks_question_passage_pairs():
 
     class FakeTokenizer:
         def encode_batch(self, pairs):
+            """Return fake encodings for the supplied query-text pairs."""
             assert pairs == [("question", "low"), ("question", "high")]
             return [Encoding(), Encoding()]
 
     class FakeSession:
         def get_inputs(self):
+            """Return the fake model input descriptors."""
             return [type("Input", (), {"name": "input_ids"})()]
 
         def run(self, _outputs, inputs):
+            """Return fake model scores for the encoded inputs."""
             assert inputs["input_ids"].shape == (2, 2)
             return [np.array([[0.1], [0.9]])]
 

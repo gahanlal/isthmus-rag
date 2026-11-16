@@ -1,3 +1,5 @@
+"""Define embedding-provider utilities and normalized vector similarity calculations."""
+
 from __future__ import annotations
 
 import hashlib
@@ -16,6 +18,7 @@ class EmbeddingProvider(Protocol):
 
 
 def token_limit(provider: EmbeddingProvider) -> tuple[Callable[[str], int], int] | None:
+    """Return a provider?s validated token counter and input limit when available."""
     counter = getattr(provider, "count_tokens", None)
     maximum = getattr(provider, "max_input_tokens", None)
     if counter is None and maximum is None:
@@ -26,6 +29,7 @@ def token_limit(provider: EmbeddingProvider) -> tuple[Callable[[str], int], int]
 
 
 def count_tokens(counter: Callable[[str], int], text: str) -> int:
+    """Count tokens and reject invalid counts from the provider callback."""
     count = counter(text)
     if not isinstance(count, int) or isinstance(count, bool) or count < 0:
         raise ValueError("Embedding token counter must return a non-negative integer.")
@@ -40,6 +44,7 @@ class OpenAIEmbeddingProvider:
         api_key: str | None = None,
         base_url: str | None = None,
     ) -> None:
+        """Validate settings and configure the OpenAI-compatible embedding client."""
         if not model.strip():
             raise ValueError("Specify an embedding model ID.")
         if dimensions is not None and dimensions < 1:
@@ -61,9 +66,11 @@ class OpenAIEmbeddingProvider:
         self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def embed(self, text: str) -> tuple[float, ...]:
+        """Embed one text and return its vector."""
         return self.embed_many([text])[0]
 
     def embed_many(self, texts: Sequence[str]) -> tuple[tuple[float, ...], ...]:
+        """Request a batch of vectors and restore the service response to input order."""
         if not texts:
             return ()
         kwargs = {"input": list(texts), "model": self.model}
@@ -86,6 +93,7 @@ def embed_many(
     provider: EmbeddingProvider,
     texts: Sequence[str],
 ) -> tuple[tuple[float, ...], ...]:
+    """Validate input token limits and use provider batching when available."""
     budget = token_limit(provider)
     if budget is not None:
         counter, maximum = budget
@@ -106,6 +114,7 @@ def embed_many(
 
 
 def normalize_vector(vector: Sequence[float]) -> tuple[float, ...]:
+    """Return a unit-length vector while preserving zero or already normalized vectors."""
     magnitude = math.sqrt(sum(value * value for value in vector))
     if not magnitude:
         return tuple(vector)
@@ -118,6 +127,7 @@ def normalized_cosine_similarity(
     left: Sequence[float],
     right: Sequence[float],
 ) -> float:
+    """Return cosine similarity mapped to the zero-to-one range for normalized vectors."""
     if not left or not right or len(left) != len(right):
         return 0.0
     cosine = sum(a * b for a, b in zip(left, right))
@@ -125,6 +135,7 @@ def normalized_cosine_similarity(
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    """Compute cosine similarity for arbitrary vectors and map it to the zero-to-one range."""
     if not left or not right or len(left) != len(right):
         return 0.0
     left_norm = math.sqrt(sum(value * value for value in left))

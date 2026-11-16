@@ -1,3 +1,5 @@
+"""Provide in-memory and persistent indexes for documents, chunks, vectors, and relationships."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -31,6 +33,7 @@ class InMemoryIndex:
     """Small vector index used by the local POC and unit tests."""
 
     def __init__(self, embedding_provider: EmbeddingProvider) -> None:
+        """Initialize the in-memory document, chunk, relationship, and sector stores."""
         self.embedding_provider = embedding_provider
         self.documents: dict[str, Document] = {}
         self.chunks: dict[str, Chunk] = {}
@@ -44,6 +47,7 @@ class InMemoryIndex:
         chunks: Iterable[Chunk],
         relationships: Iterable[Relationship] = (),
     ) -> None:
+        """Validate, embed, and store a document?s chunks and relationships, replacing prior content."""
         chunk_list = list(chunks)
         edges = tuple(relationships)
         for chunk in chunk_list:
@@ -87,9 +91,11 @@ class InMemoryIndex:
         self.version += 1
 
     def add_relationship(self, relationship: Relationship) -> None:
+        """Add one validated relationship between indexed chunks."""
         self.add_relationships((relationship,))
 
     def add_relationships(self, relationships: Iterable[Relationship]) -> None:
+        """Validate and add relationships without crossing document boundaries."""
         edges = tuple(relationships)
         for relationship in edges:
             source = self.chunks.get(relationship.source_chunk_id)
@@ -103,9 +109,11 @@ class InMemoryIndex:
             self.version += 1
 
     def search(self, query: str, limit: int = 30) -> tuple[SearchHit, ...]:
+        """Embed a text query and return its nearest indexed chunks."""
         return self.search_by_vector(self.embed_query(query), limit)
 
     def embed_query(self, query: str) -> tuple[float, ...]:
+        """Embed and normalize a query using the configured provider."""
         return normalize_vector(embed_many(self.embedding_provider, [query])[0])
 
     def search_by_vector(
@@ -113,6 +121,7 @@ class InMemoryIndex:
         query_vector: tuple[float, ...],
         limit: int = 30,
     ) -> tuple[SearchHit, ...]:
+        """Rank all chunks by normalized cosine similarity with stable ID tie-breaking."""
         if limit <= 0:
             return ()
         unit_query_vector = normalize_vector(query_vector)
@@ -127,6 +136,7 @@ class InMemoryIndex:
         )
 
     def similarity(self, query: str, chunk: Chunk) -> float:
+        """Embed a query and score it against one chunk."""
         return self.similarity_to_vector(self.embed_query(query), chunk)
 
     @staticmethod
@@ -134,6 +144,7 @@ class InMemoryIndex:
         query_vector: tuple[float, ...],
         chunk: Chunk,
     ) -> float:
+        """Score a query vector against a chunk embedding."""
         return normalized_cosine_similarity(query_vector, chunk.embedding)
 
 
@@ -143,21 +154,27 @@ class BackendIndex(InMemoryIndex):
     provider_id: str
 
     def add_sector(self, sector_id: str) -> None:
+        """Declare the backend operation for adding a sector."""
         raise NotImplementedError
 
     def remove_sector(self, sector_id: str) -> None:
+        """Declare the backend operation for removing an empty sector."""
         raise NotImplementedError
 
     def remove_document(self, document_id: str) -> None:
+        """Declare the backend operation for removing a document."""
         raise NotImplementedError
 
     def close(self) -> None:
+        """Declare the backend resource cleanup operation."""
         raise NotImplementedError
 
     def __enter__(self) -> BackendIndex:
+        """Return this backend for use as a context manager."""
         return self
 
     def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        """Close the backend when leaving a context manager."""
         self.close()
 
 
@@ -169,6 +186,7 @@ class SQLiteIndex(BackendIndex):
         embedding_provider: EmbeddingProvider,
         database_path: str | Path = "isthmus.db",
     ) -> None:
+        """Open the SQLite database, validate its embedding provider, and load cached records."""
         super().__init__(embedding_provider)
         self.database_path = str(database_path)
         if self.database_path != ":memory:":
@@ -197,6 +215,7 @@ class SQLiteIndex(BackendIndex):
         query_vector: tuple[float, ...],
         limit: int = 30,
     ) -> tuple[SearchHit, ...]:
+        """Query the refreshed Chroma vector cache and return ranked chunks."""
         if limit <= 0 or not self.chunks:
             return ()
         unit_query_vector = normalize_vector(query_vector)
@@ -243,6 +262,7 @@ class SQLiteIndex(BackendIndex):
         )
 
     def _create_schema(self) -> None:
+        """Create the SQLite tables and indexes used by the persistent backend."""
         self.connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS sectors (
@@ -290,6 +310,7 @@ class SQLiteIndex(BackendIndex):
         )
 
     def _validate_provider(self) -> None:
+        """Ensure database embedding metadata matches the configured provider."""
         row = self.connection.execute(
             "SELECT value FROM index_metadata WHERE key = 'embedding_provider'"
         ).fetchone()
@@ -328,6 +349,7 @@ class SQLiteIndex(BackendIndex):
             )
 
     def _load_cache(self) -> None:
+        """Load sectors, documents, chunks, and relationships into memory."""
         self.sectors.update(
             row["id"] for row in self.connection.execute("SELECT id FROM sectors")
         )
@@ -371,6 +393,7 @@ class SQLiteIndex(BackendIndex):
 
     @staticmethod
     def _chunk_from_row(row: sqlite3.Row) -> Chunk:
+        """Reconstruct a chunk and validate its stored embedding from a SQLite row."""
         stored_embedding = row["embedding"]
         if isinstance(stored_embedding, str):
             embedding = tuple(json.loads(stored_embedding))
@@ -402,6 +425,7 @@ class SQLiteIndex(BackendIndex):
         chunks: Iterable[Chunk],
         relationships: Iterable[Relationship] = (),
     ) -> None:
+        """Transactionally replace a document and persist its chunks, vectors, and relationships."""
         chunk_list = list(chunks)
         edges = tuple(relationships)
         for chunk in chunk_list:
@@ -495,9 +519,11 @@ class SQLiteIndex(BackendIndex):
         self.version += 1
 
     def add_relationship(self, relationship: Relationship) -> None:
+        """Persist one validated relationship between indexed chunks."""
         self.add_relationships((relationship,))
 
     def add_relationships(self, relationships: Iterable[Relationship]) -> None:
+        """Validate and transactionally persist relationships between indexed chunks."""
         edges = tuple(relationships)
         for relationship in edges:
             source = self.chunks.get(relationship.source_chunk_id)
@@ -531,6 +557,7 @@ class SQLiteIndex(BackendIndex):
         self.version += 1
 
     def add_sector(self, sector_id: str) -> None:
+        """Insert a normalized, non-empty sector in SQLite and the local cache."""
         normalized_id = sector_id.strip()
         if not normalized_id:
             raise ValueError("sector name cannot be empty")
@@ -542,6 +569,7 @@ class SQLiteIndex(BackendIndex):
         self.sectors.add(normalized_id)
 
     def remove_document(self, document_id: str) -> None:
+        """Delete a document and its dependent chunks and relationships from SQLite and cache."""
         if document_id not in self.documents:
             raise KeyError(f"unknown document: {document_id}")
         with self.connection:
@@ -565,6 +593,7 @@ class SQLiteIndex(BackendIndex):
         self.version += 1
 
     def remove_sector(self, sector_id: str) -> None:
+        """Delete an empty sector from SQLite and the local cache."""
         if any(document.sector_id == sector_id for document in self.documents.values()):
             raise ValueError(f"sector {sector_id} still contains documents")
         if sector_id not in self.sectors:
@@ -575,6 +604,7 @@ class SQLiteIndex(BackendIndex):
         self.version += 1
 
     def close(self) -> None:
+        """Delete the ephemeral vector collection and close the SQLite connection."""
         try:
             if self._vector_client is not None and self._vector_collection is not None:
                 self._vector_client.delete_collection(self._vector_collection.name)
@@ -583,7 +613,9 @@ class SQLiteIndex(BackendIndex):
             self.connection.close()
 
     def __enter__(self) -> SQLiteIndex:
+        """Return this SQLite index for use as a context manager."""
         return self
 
     def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        """Close the SQLite index when leaving a context manager."""
         self.close()

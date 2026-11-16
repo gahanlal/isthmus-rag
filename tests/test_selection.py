@@ -1,3 +1,5 @@
+"""Test sector routing and document evidence selection policies."""
+
 import json
 import os
 from dataclasses import replace
@@ -11,6 +13,7 @@ from isthmus.selection import LLMSectorSelector, rerank_documents
 
 
 def package(document_id, score, supported, sections=()):
+    """Build and return the evidence package used by the selection test."""
     return EvidencePackage(
         document_id=document_id,
         seed_chunk_ids=(),
@@ -26,6 +29,7 @@ def package(document_id, score, supported, sections=()):
 
 
 def plan(requirement_ids):
+    """Build and return the query plan used by the selection test."""
     return QueryPlan(
         "question",
         "factual",
@@ -39,6 +43,7 @@ def plan(requirement_ids):
 
 
 def test_llm_sector_selector_uses_query_scores_and_heuristic_shortlist():
+    """Verify that llm sector selector uses query scores and heuristic shortlist."""
     prompts = []
     selector = LLMSectorSelector(lambda prompt: prompts.append(prompt) or '{"selected_sectors":["legal"]}')
 
@@ -58,6 +63,7 @@ def test_llm_sector_selector_uses_query_scores_and_heuristic_shortlist():
 
 
 def test_llm_sector_selector_rejects_unknown_sectors():
+    """Verify that llm sector selector rejects unknown sectors."""
     selector = LLMSectorSelector(lambda _prompt: '{"selected_sectors":["unknown"]}')
 
     with pytest.raises(ValueError, match="invalid sector IDs"):
@@ -65,6 +71,7 @@ def test_llm_sector_selector_rejects_unknown_sectors():
 
 
 def test_llm_sector_selector_is_disabled_by_default(monkeypatch):
+    """Verify that llm sector selector is disabled by default."""
     monkeypatch.delenv("ISTHMUS_LLM_SECTOR_SELECTION", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -76,13 +83,16 @@ def test_llm_sector_selector_is_disabled_by_default(monkeypatch):
     [("true", None), ("false", True)],
 )
 def test_llm_sector_selector_can_be_opted_in(monkeypatch, setting, enabled):
+    """Verify that llm sector selector can be opted in."""
     requests = []
 
     class Client:
         def __init__(self, **_kwargs):
+            """Initialize the test double and its configured state."""
             self.responses = self
 
         def create(self, **kwargs):
+            """Return a configured fake response for the test request."""
             requests.append(kwargs)
             return SimpleNamespace(output_text='{"selected_sectors":["finance"]}')
 
@@ -97,6 +107,7 @@ def test_llm_sector_selector_can_be_opted_in(monkeypatch, setting, enabled):
 
 
 def test_llm_sector_selector_rejects_invalid_opt_in_value(monkeypatch):
+    """Verify that llm sector selector rejects invalid opt in value."""
     monkeypatch.setenv("ISTHMUS_LLM_SECTOR_SELECTION", "sometimes")
 
     with pytest.raises(RuntimeError, match="must be true or false"):
@@ -104,6 +115,7 @@ def test_llm_sector_selector_rejects_invalid_opt_in_value(monkeypatch):
 
 
 def test_complete_single_document_is_sufficient():
+    """Verify that complete single document is sufficient."""
     selected, assessments = rerank_documents(
         [package("complete", 0.9, {"main", "exception"}), package("redundant", 0.95, {"main"})],
         plan(("main", "exception")),
@@ -114,6 +126,7 @@ def test_complete_single_document_is_sufficient():
 
 
 def test_marginal_policy_stops_redundant_documents_before_the_target():
+    """Verify that marginal policy stops redundant documents before the target."""
     selected, _ = rerank_documents(
         [package("a", 0.95, {"main"}), package("b", 0.9, {"main"}), package("c", 0.1, {"main"})],
         plan(("main",)),
@@ -123,6 +136,7 @@ def test_marginal_policy_stops_redundant_documents_before_the_target():
 
 
 def test_fixed_target_policy_can_be_compared_with_marginal_policy():
+    """Verify that fixed target policy can be compared with marginal policy."""
     evidence = [
         package("a", 0.95, {"main"}),
         package("b", 0.9, {"main"}),
@@ -140,6 +154,7 @@ def test_fixed_target_policy_can_be_compared_with_marginal_policy():
 
 
 def test_unique_exception_evidence_outranks_a_redundant_document():
+    """Verify that unique exception evidence outranks a redundant document."""
     selected, _ = rerank_documents(
         [
             package("policy", 0.92, {"main"}),
@@ -154,6 +169,7 @@ def test_unique_exception_evidence_outranks_a_redundant_document():
 
 
 def test_more_than_target_documents_can_cover_distinct_requirements():
+    """Verify that more than target documents can cover distinct requirements."""
     evidence = [
         package(f"doc-{number}", score, {f"r{number}"})
         for number, score in enumerate((0.95, 0.8, 0.6, 0.3), start=1)
@@ -168,6 +184,7 @@ def test_more_than_target_documents_can_cover_distinct_requirements():
 
 
 def test_marginal_policy_stops_redundant_documents_when_coverage_is_incomplete():
+    """Verify that marginal policy stops redundant documents when coverage is incomplete."""
     evidence = [
         package("a", 0.9, {"main"}),
         package("b", 0.8, {"main"}),
@@ -178,12 +195,14 @@ def test_marginal_policy_stops_redundant_documents_when_coverage_is_incomplete()
 
 
 def test_near_ties_use_score_then_id_not_input_order():
+    """Verify that near ties use score then id not input order."""
     evidence = [package("z", 0.9, {"main"}), package("a", 0.9, {"main"})]
     assert rerank_documents(evidence, plan(("main",)), target_documents=1)[0] == ("a",)
     assert rerank_documents(list(reversed(evidence)), plan(("main",)), target_documents=1)[0] == ("a",)
 
 
 def test_marginal_partial_coverage_is_selected_before_complete_evidence():
+    """Verify that marginal partial coverage is selected before complete evidence."""
     evidence = [
         replace(package("first", 0.9, {"r1"}), requirement_scores={"r1": 1.0}),
         replace(package("partial", 1.0, set()), requirement_scores={"r2": 0.71}),

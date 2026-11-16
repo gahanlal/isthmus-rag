@@ -1,3 +1,5 @@
+"""Test PDF chunking, source identity, and embedding token limits."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +9,7 @@ from isthmus.ingestion import _split_text, parse_pdf, parse_pdf_bytes
 
 
 def test_pdf_text_split_respects_word_limit_and_preserves_content():
+    """Verify that pdf text split respects word limit and preserves content."""
     chunks = _split_text(
         "one two three four five six seven eight nine ten",
         max_words=4,
@@ -16,6 +19,7 @@ def test_pdf_text_split_respects_word_limit_and_preserves_content():
 
 
 def test_pdf_identity_tracks_bytes_and_requires_explicit_sector(tmp_path, monkeypatch):
+    """Verify that pdf identity tracks bytes and requires explicit sector."""
     monkeypatch.setattr(
         ingestion, "PdfReader",
         lambda stream: SimpleNamespace(pages=[SimpleNamespace(extract_text=lambda: stream.read().decode())]),
@@ -40,13 +44,16 @@ def test_pdf_identity_tracks_bytes_and_requires_explicit_sector(tmp_path, monkey
 
 
 def test_token_aware_pdf_chunks_preserve_all_content(monkeypatch):
+    """Verify that token aware pdf chunks preserve all content."""
     class Provider:
         max_input_tokens = 10
 
         def count_tokens(self, text):
+            """Return the test tokenizer?s count for the supplied text."""
             return len(text) + 2
 
         def embed(self, text):
+            """Return the test embedding for the supplied text."""
             return (1.0, 0.0)
 
     text = "one longunbrokenword two three"
@@ -63,5 +70,6 @@ def test_token_aware_pdf_chunks_preserve_all_content(monkeypatch):
 
 
 def test_token_limit_too_small_is_reported():
+    """Verify that token limit too small is reported."""
     with pytest.raises(ValueError, match="too small"):
         _split_text("text", 300, (lambda text: len(text) + 2, 2))

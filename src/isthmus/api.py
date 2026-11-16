@@ -1,3 +1,5 @@
+"""Expose the document indexing and retrieval workflow through a FastAPI service."""
+
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -39,6 +41,7 @@ class QueryRequest(BaseModel):
 
 
 def _index() -> BackendIndex:
+    """Create an index using the embedding settings and database path from the environment."""
     dimensions = os.getenv("ISTHMUS_EMBEDDING_DIMENSIONS", "")
     provider = OpenAIEmbeddingProvider(
         model=os.getenv("ISTHMUS_EMBEDDING_MODEL", ""),
@@ -50,12 +53,14 @@ def _index() -> BackendIndex:
 
 @app.get("/documents")
 def list_documents() -> dict:
+    """Return the indexed sector names and document records."""
     with _index() as index:
         return {"sectors": sorted(index.sectors), "documents": [asdict(doc) for doc in index.documents.values()]}
 
 
 @app.post("/sectors", status_code=201)
 def create_sector(request: SectorRequest) -> dict:
+    """Add a sector and return its normalized name, translating invalid names to HTTP errors."""
     try:
         with _index() as index:
             index.add_sector(request.name)
@@ -69,6 +74,7 @@ def upload_document(
     file: Annotated[UploadFile, File()],
     sector: Annotated[str, Form()],
 ) -> dict:
+    """Parse and index an uploaded file in an existing sector."""
     try:
         if not file.filename:
             raise ValueError("A document filename is required.")
@@ -88,6 +94,7 @@ def upload_document(
 
 @app.delete("/documents/{document_id}")
 def delete_document(document_id: str) -> dict:
+    """Remove an indexed document and return its identifier."""
     with _index() as index:
         try:
             index.remove_document(document_id)
@@ -98,6 +105,7 @@ def delete_document(document_id: str) -> dict:
 
 @app.post("/query")
 def query(request: QueryRequest) -> dict:
+    """Retrieve evidence for a question and optionally generate a cited answer."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be blank.")
     try:

@@ -1,3 +1,5 @@
+"""Build and run a small travel-policy retrieval example."""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +14,7 @@ from isthmus.pipeline import Isthmus, PipelineConfig
 
 
 def build_demo(embeddings: EmbeddingProvider) -> Isthmus:
+    """Create an in-memory travel policy index and return its retrieval pipeline."""
     index = InMemoryIndex(embeddings)
     document = Document("policy-001", "Travel Reimbursement Policy", "Finance")
     contents = [
@@ -52,6 +55,7 @@ def build_demo(embeddings: EmbeddingProvider) -> Isthmus:
 
 
 def main() -> None:
+    """Load embedding settings, run the sample travel question, and print its retrieval trace."""
     load_dotenv()
     model = os.getenv("ISTHMUS_EMBEDDING_MODEL", "")
     dimensions = os.getenv("ISTHMUS_EMBEDDING_DIMENSIONS", "")

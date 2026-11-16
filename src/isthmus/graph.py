@@ -1,3 +1,5 @@
+"""Expand retrieval seeds through bounded document-local relationship graphs."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -52,6 +54,7 @@ class AdaptiveGraphRetriever:
         similarity: Callable[[str, Chunk], float],
         config: TraversalConfig | None = None,
     ) -> None:
+        """Index chunks by document and build adjacency for valid within-document relationships."""
         self.chunks = {chunk.id: chunk for chunk in chunks}
         self.chunks_by_document: dict[str, dict[str, Chunk]] = {}
         for chunk in self.chunks.values():
@@ -74,6 +77,7 @@ class AdaptiveGraphRetriever:
         similarity: Callable[[str, Chunk], float] | None = None,
         score_requirements: Callable[[Chunk], dict[str, float]] | None = None,
     ) -> EvidencePackage:
+        """Traverse from ranked seeds and return bounded, scored evidence for one document."""
         document_chunks = self.chunks_by_document.get(document_id, {})
         seeds = []
         seen_seeds: set[str] = set()
@@ -129,6 +133,7 @@ class AdaptiveGraphRetriever:
             *(requirement.terms for requirement in query_plan.requirements if requirement.id != "exceptions")
         )
         def scores_for(chunk: Chunk) -> dict[str, float]:
+            """Cache requirement scores for each chunk reached during this traversal."""
             if chunk.id not in requirement_scores_cache:
                 requirement_scores_cache[chunk.id] = (
                     score_requirements(chunk) if score_requirements is not None else {
@@ -266,6 +271,7 @@ class AdaptiveGraphRetriever:
         )
 
     def _eligible_relationships(self, query_plan: QueryPlan) -> set[RelationshipType]:
+        """Choose sequential edges and exception qualifiers allowed by the query."""
         relationships = {RelationshipType.PREVIOUS, RelationshipType.NEXT}
         if query_plan.asks_exceptions:
             relationships.add(RelationshipType.QUALIFIES)
@@ -278,6 +284,7 @@ class AdaptiveGraphRetriever:
         eligible: set[RelationshipType],
         query_plan: QueryPlan,
     ) -> list[Relationship]:
+        """Return eligible outgoing edges that match the current traversal direction."""
         result = []
         for edge in self.adjacency.get(chunk_id, []):
             if edge.relationship_type not in eligible:
@@ -294,6 +301,7 @@ class AdaptiveGraphRetriever:
         return result
 
     def _direction_limit(self, relationship: RelationshipType) -> int:
+        """Return the configured traversal budget for a previous or next edge."""
         if relationship == RelationshipType.PREVIOUS:
             return self.config.max_backward
         return self.config.max_forward

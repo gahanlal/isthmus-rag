@@ -1,3 +1,5 @@
+"""Coordinate query planning, retrieval, graph expansion, evidence selection, and coverage."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -48,6 +50,7 @@ class Isthmus:
         query_planner: QueryPlanner | None = None,
         sector_selector: SectorSelector | None = None,
     ) -> None:
+        """Store the index, configuration, planner, and optional sector selector."""
         self.index = index
         self.config = config or PipelineConfig()
         self.query_planner = query_planner if query_planner is not None else planner_from_environment()
@@ -62,6 +65,7 @@ class Isthmus:
         query_vector: tuple[float, ...] | None = None,
         global_hits: tuple[SearchHit, ...] | None = None,
     ) -> RetrievalResult:
+        """Plan a query, retrieve and expand candidates, select evidence, and compute coverage."""
         plan = self.query_planner.plan(text) if self.query_planner else understand_query(text)
         if query_vector is None:
             query_vector = self.index.embed_query(text)
@@ -198,6 +202,7 @@ class Isthmus:
         )
 
     def _get_graph_retriever(self) -> AdaptiveGraphRetriever:
+        """Reuse the graph retriever until the index version changes."""
         if (
             self._graph_retriever is None
             or self._graph_index_version != self.index.version
@@ -218,6 +223,7 @@ class Isthmus:
         plan: QueryPlan,
         score_requirements: Callable[[Chunk], Mapping[str, float]],
     ) -> tuple[Chunk, ...]:
+        """Choose deduplicated chunks that maximize requirement coverage within the token budget."""
         package_by_id = {package.document_id: package for package in packages}
         candidates = []
         seen: set[tuple[str, str]] = set()
@@ -257,5 +263,6 @@ class Isthmus:
 
     @staticmethod
     def _coverage(plan, context: tuple[Chunk, ...], scorer) -> dict[str, str]:
+        """Return the aggregate support status for every planned requirement."""
         scores = aggregate_coverage(plan, context, scorer)
         return {key: coverage_status(score) for key, score in scores.items()}

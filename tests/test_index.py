@@ -1,3 +1,5 @@
+"""Test in-memory and SQLite index search, persistence, and validation."""
+
 import sqlite3
 
 import pytest
@@ -13,21 +15,26 @@ from isthmus.models import (
 
 class FixedEmbeddingProvider:
     def embed(self, _text):
+        """Return a fixed vector for every test input."""
         return (1.0, 0.0)
 
 
 @pytest.mark.parametrize("persistent", [False, True])
 def test_token_aware_provider_rejects_oversized_inputs_before_embedding(tmp_path, persistent):
+    """Verify that token aware provider rejects oversized inputs before embedding."""
     class Provider:
         max_input_tokens = 5
 
         def __init__(self):
+            """Initialize the test double and its configured state."""
             self.calls = 0
 
         def count_tokens(self, text):
+            """Return the test tokenizer?s count for the supplied text."""
             return len(text)
 
         def embed(self, text):
+            """Return the test embedding for the supplied text."""
             self.calls += 1
             return (1.0, 0.0)
 
@@ -44,6 +51,7 @@ def test_token_aware_provider_rejects_oversized_inputs_before_embedding(tmp_path
 
 
 def test_search_returns_top_k_with_deterministic_ties():
+    """Verify that search returns top k with deterministic ties."""
     index = InMemoryIndex(FixedEmbeddingProvider())
     document = Document("doc", "Document", "sector")
     index.add_document(
@@ -62,6 +70,7 @@ def test_search_returns_top_k_with_deterministic_ties():
 
 
 def test_sqlite_index_persists_content_relationships_and_vectors(tmp_path):
+    """Verify that sqlite index persists content relationships and vectors."""
     database_path = tmp_path / "isthmus.db"
     document = Document("doc", "Document", "sector")
     chunks = [
@@ -91,6 +100,7 @@ def test_sqlite_index_persists_content_relationships_and_vectors(tmp_path):
 
 
 def test_sqlite_sector_and_document_management(tmp_path):
+    """Verify that sqlite sector and document management."""
     database_path = tmp_path / "isthmus.db"
     with SQLiteIndex(FixedEmbeddingProvider(), database_path) as index:
         index.add_sector("Empty")
@@ -117,8 +127,10 @@ def test_sqlite_sector_and_document_management(tmp_path):
 
 
 def test_sqlite_rejects_a_different_embedding_provider(tmp_path):
+    """Verify that sqlite rejects a different embedding provider."""
     class OtherEmbeddingProvider:
         def embed(self, _text):
+            """Return the test embedding for the supplied text."""
             return (0.0, 1.0)
 
     database_path = tmp_path / "isthmus.db"
@@ -137,8 +149,10 @@ def test_sqlite_rejects_a_different_embedding_provider(tmp_path):
 
 
 def test_empty_index_can_switch_embedding_provider(tmp_path):
+    """Verify that empty index can switch embedding provider."""
     class OtherEmbeddingProvider:
         def embed(self, _text):
+            """Return the test embedding for the supplied text."""
             return (0.0, 1.0)
 
     database_path = tmp_path / "empty.db"
@@ -154,6 +168,7 @@ def test_empty_index_can_switch_embedding_provider(tmp_path):
 
 
 def test_reindex_rolls_back_document_if_relationship_storage_fails(tmp_path):
+    """Verify that reindex rolls back document if relationship storage fails."""
     database_path = tmp_path / "isthmus.db"
     document = Document("doc", "Document", "sector")
     edge = Relationship("new", "new", RelationshipType.REFERENCES)
@@ -169,6 +184,7 @@ def test_reindex_rolls_back_document_if_relationship_storage_fails(tmp_path):
 
 
 def test_loading_relationships_does_not_write_to_database(tmp_path, monkeypatch):
+    """Verify that loading relationships does not write to database."""
     database_path = tmp_path / "isthmus.db"
     with SQLiteIndex(FixedEmbeddingProvider(), database_path) as index:
         index.add_document(
@@ -178,6 +194,7 @@ def test_loading_relationships_does_not_write_to_database(tmp_path, monkeypatch)
         )
 
     def reject_writes(self, relationships):
+        """Raise an assertion if cache loading attempts a database write."""
         raise AssertionError("loading must not write relationships")
 
     monkeypatch.setattr(SQLiteIndex, "add_relationships", reject_writes)
@@ -186,6 +203,7 @@ def test_loading_relationships_does_not_write_to_database(tmp_path, monkeypatch)
 
 
 def test_chroma_search_updates_when_document_changes(tmp_path):
+    """Verify that chroma search updates when document changes."""
     with SQLiteIndex(FixedEmbeddingProvider(), tmp_path / "vectors.db") as index:
         document = Document("doc", "Document", "sector")
         index.add_document(document, [

@@ -1,3 +1,5 @@
+"""Test document parsing, provenance, relationships, and content revisions."""
+
 from io import BytesIO
 
 from docx import Document as DocxDocument
@@ -12,12 +14,14 @@ from conftest import FakeEmbeddingProvider
 
 
 def _bytes(document):
+    """Return encoded bytes for a document-parser fixture."""
     buffer = BytesIO()
     document.save(buffer)
     return buffer.getvalue()
 
 
 def test_markdown_preserves_headings_and_parent_relationships():
+    """Verify that markdown preserves headings and parent relationships."""
     _, chunks, relationships = parse_document_bytes(
         b"# Policy\n\nTravel expenses are reimbursed.\n\n## Exceptions\n\nUrgent trips qualify.",
         "policy.md", "Finance",
@@ -33,6 +37,7 @@ def test_markdown_preserves_headings_and_parent_relationships():
 
 
 def test_markdown_extracts_qualifies_edges_for_exception_sections():
+    """Verify that markdown extracts qualifies edges for exception sections."""
     _, chunks, relationships = parse_document_bytes(
         b"# Policy\n\nTravel costs require manager approval.\n\n"
         b"## Exceptions\n\nExcept urgent travel, approval is unnecessary.",
@@ -50,6 +55,7 @@ def test_markdown_extracts_qualifies_edges_for_exception_sections():
 
 
 def test_docx_preserves_heading_and_table_rows():
+    """Verify that docx preserves heading and table rows."""
     document = DocxDocument()
     document.add_heading("Policy", level=1)
     document.add_paragraph("Approved travel only.")
@@ -63,6 +69,7 @@ def test_docx_preserves_heading_and_table_rows():
 
 
 def test_presentation_and_spreadsheet_locations():
+    """Verify that presentation and spreadsheet locations."""
     presentation = Presentation()
     slide = presentation.slides.add_slide(presentation.slide_layouts[1])
     slide.shapes.title.text = "Overview"
@@ -79,6 +86,7 @@ def test_presentation_and_spreadsheet_locations():
 
 
 def test_text_and_unsupported_formats():
+    """Verify that text and unsupported formats."""
     _, chunks, _ = parse_document_bytes(b"First paragraph.\n\nSecond paragraph.", "notes.txt", "General")
     assert len(chunks) == 2
     with pytest.raises(ValueError, match="Unsupported"):
@@ -86,13 +94,16 @@ def test_text_and_unsupported_formats():
 
 
 def test_token_aware_text_chunks_keep_provenance():
+    """Verify that token aware text chunks keep provenance."""
     class Provider:
         max_input_tokens = 12
 
         def count_tokens(self, text):
+            """Return the test tokenizer?s count for the supplied text."""
             return len(text) + 2
 
         def embed(self, text):
+            """Return the test embedding for the supplied text."""
             return (1.0, 0.0)
 
     provider = Provider()
@@ -107,6 +118,7 @@ def test_token_aware_text_chunks_keep_provenance():
 
 
 def test_content_revisions_coexist_and_legacy_index_is_preserved(tmp_path):
+    """Verify that content revisions coexist and legacy index is preserved."""
     database = tmp_path / "index.db"
     provider = FakeEmbeddingProvider()
     first = parse_document_bytes(b"Original text.", "report.txt", "Finance")
@@ -132,6 +144,7 @@ def test_content_revisions_coexist_and_legacy_index_is_preserved(tmp_path):
 
 @pytest.mark.parametrize("filename", ["report.txt", "report.md", "report.docx", "report.pptx", "report.xlsx"])
 def test_each_format_uses_bytes_for_identity(filename):
+    """Verify that each format uses bytes for identity."""
     if filename.endswith(".docx"):
         source = DocxDocument()
         source.add_paragraph("Text")
@@ -157,5 +170,6 @@ def test_each_format_uses_bytes_for_identity(filename):
 
 @pytest.mark.parametrize("sector", ["", "  ", None])
 def test_document_requires_nonempty_sector(sector):
+    """Verify that document requires nonempty sector."""
     with pytest.raises(ValueError, match="sector"):
         parse_document_bytes(b"text", "Cyber-law.txt", sector)

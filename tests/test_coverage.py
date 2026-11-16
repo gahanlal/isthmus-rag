@@ -1,3 +1,5 @@
+"""Test lexical and semantic evidence coverage and optional query and sector planners."""
+
 import json
 
 from isthmus.coverage import aggregate_coverage, coverage_status, requirement_score, semantic_scores
@@ -6,6 +8,7 @@ from isthmus.query import LLMQueryPlanner, understand_query
 
 
 def test_one_shared_term_is_not_full_requirement_coverage():
+    """Verify that one shared term is not full requirement coverage."""
     requirement = QueryRequirement(
         "main", "contractor reimbursement exceptions",
         frozenset({"contractor", "reimbursement", "exceptions"}),
@@ -17,6 +20,7 @@ def test_one_shared_term_is_not_full_requirement_coverage():
 
 
 def test_coverage_aggregates_per_chunk_not_disconnected_terms():
+    """Verify that coverage aggregates per chunk not disconnected terms."""
     requirement = QueryRequirement("main", "contractor reimbursement policy", frozenset({"contractor", "reimbursement", "policy"}))
     plan = QueryPlan("question", "factual", (requirement,), False, False)
     chunks = [
@@ -28,16 +32,19 @@ def test_coverage_aggregates_per_chunk_not_disconnected_terms():
 
 
 def test_strong_semantic_match_can_support_paraphrased_evidence():
+    """Verify that strong semantic match can support paraphrased evidence."""
     requirement = QueryRequirement("main", "deadline for expense receipts", frozenset({"deadline", "expense", "receipts"}))
     chunk = Chunk("one", "doc", "sector", "Submit itemized claims within thirty days.", 1)
     assert coverage_status(requirement_score(requirement, chunk, 0.95)) == "sufficient"
 
 
 def test_deterministic_planner_recognizes_waivers():
+    """Verify that deterministic planner recognizes waivers."""
     assert understand_query("Can the booking deadline be waived?").asks_exceptions
 
 
 def test_exception_coverage_needs_topic_as_well_as_exception_language():
+    """Verify that exception coverage needs topic as well as exception language."""
     plan = understand_query("contractor reimbursement exceptions")
     vectors = {requirement.id: (1.0, 0.0) for requirement in plan.requirements}
     unrelated = Chunk("unrelated", "doc", "sector", "Employee waiver is available.", 1, embedding=(1.0, 0.0))
@@ -49,6 +56,7 @@ def test_exception_coverage_needs_topic_as_well_as_exception_language():
 
 
 def test_deterministic_planner_separates_comparisons_and_explicit_questions():
+    """Verify that deterministic planner separates comparisons and explicit questions."""
     comparison = understand_query("Compare travel and reimbursement policies")
     assert [requirement.description for requirement in comparison.requirements] == ["travel", "reimbursement policies"]
     multipart = understand_query("What are the booking rules and who approves them?")
@@ -57,6 +65,7 @@ def test_deterministic_planner_separates_comparisons_and_explicit_questions():
 
 
 def test_optional_model_planner_preserves_query_and_validates_output():
+    """Verify that optional model planner preserves query and validates output."""
     query = "Can the booking deadline ever be waived?"
     planner = LLMQueryPlanner(lambda _: json.dumps({
         "intent": "factual",
@@ -70,12 +79,14 @@ def test_optional_model_planner_preserves_query_and_validates_output():
 
 
 def test_optional_model_planner_falls_back_on_invalid_response(caplog):
+    """Verify that optional model planner falls back on invalid response."""
     plan = LLMQueryPlanner(lambda _: "not json").plan("What are the rules?")
     assert plan.original_query == "What are the rules?"
     assert "using deterministic planner" in caplog.text
 
 
 def test_optional_model_planner_uses_configured_model(monkeypatch):
+    """Verify that optional model planner uses configured model."""
     from types import SimpleNamespace
     import isthmus.query as query_module
 
@@ -83,10 +94,12 @@ def test_optional_model_planner_uses_configured_model(monkeypatch):
 
     class FakeOpenAIProvider:
         def __init__(self):
+            """Initialize the test double and its configured state."""
             self.model = "chosen-planner"
             self.client = SimpleNamespace(chat=SimpleNamespace(completions=self))
 
         def create(self, **kwargs):
+            """Return a configured fake response for the test request."""
             calls.append(kwargs)
             content = json.dumps({
                 "intent": "factual", "asks_exceptions": False,
@@ -105,6 +118,7 @@ def test_optional_model_planner_uses_configured_model(monkeypatch):
 
 
 def test_sector_selector_calls_gpt_4o_mini_with_semantic_scores(monkeypatch):
+    """Verify that sector selector calls gpt 4o mini with semantic scores."""
     from types import SimpleNamespace
     import isthmus.query as query_module
 
@@ -112,10 +126,12 @@ def test_sector_selector_calls_gpt_4o_mini_with_semantic_scores(monkeypatch):
 
     class FakeOpenAI:
         def __init__(self, **options):
+            """Initialize the test double and its configured state."""
             calls.append({"client_options": options})
             self.responses = self
 
         def create(self, **kwargs):
+            """Return a configured fake response for the test request."""
             calls.append(kwargs)
             return SimpleNamespace(output_text='{"selected_sectors":["legal"]}')
 

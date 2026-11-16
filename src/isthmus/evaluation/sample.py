@@ -1,3 +1,5 @@
+"""Create a small in-memory index and labeled evaluation dataset."""
+
 from __future__ import annotations
 
 from isthmus.demo import build_demo
@@ -7,6 +9,7 @@ from isthmus.index import InMemoryIndex
 
 
 def build_sample_evaluation(provider: EmbeddingProvider) -> tuple[InMemoryIndex, tuple[EvaluationCase, ...]]:
+    """Build the demo index and its three labeled travel-policy questions."""
     index = build_demo(provider).index
     cases = (
         EvaluationCase(

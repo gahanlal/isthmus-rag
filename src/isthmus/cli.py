@@ -1,3 +1,5 @@
+"""Implement the command-line interface for indexing PDFs and querying an index."""
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +19,7 @@ from isthmus.query import sector_selector_from_environment
 
 
 def _sector_argument(value: str) -> str:
+    """Strip and validate a non-empty sector argument for argparse."""
     value = value.strip()
     if not value:
         raise argparse.ArgumentTypeError("sector must not be empty")
@@ -24,6 +27,7 @@ def _sector_argument(value: str) -> str:
 
 
 def main() -> None:
+    """Parse CLI options and dispatch PDF indexing or retrieval, optionally generating an answer."""
     parser = argparse.ArgumentParser(prog="isthmus")
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -87,6 +91,7 @@ def _index_pdfs(
     provider: OpenAIEmbeddingProvider,
     sector_id: str,
 ) -> None:
+    """Index PDFs from a directory and report files indexed or skipped."""
     if not pdf_directory.is_dir():
         raise NotADirectoryError(f"PDF directory does not exist: {pdf_directory}")
     pdf_paths = sorted(pdf_directory.glob("*.pdf"))
@@ -131,6 +136,7 @@ def _query(
     answer_model: str = "",
     answer_base_url: str | None = None,
 ) -> None:
+    """Run retrieval for a question and print the result and optional citations as JSON."""
     with open_index(provider, database_path) as index:
         if not index.chunks:
             raise RuntimeError(f"No chunks are indexed in {database_path}")

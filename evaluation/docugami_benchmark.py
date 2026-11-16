@@ -37,14 +37,17 @@ class LocalMiniLM:
     provider_id = "chromadb-onnx-all-MiniLM-L6-v2:384"
 
     def __init__(self, preferred_providers: list[str] | None = None) -> None:
+        """Initialize the local ONNX MiniLM embedding function."""
         self.model = ONNXMiniLM_L6_V2(preferred_providers=preferred_providers)
 
     def embed_many(self, texts: list[str]) -> tuple[tuple[float, ...], ...]:
+        """Embed a batch of texts with MiniLM and return numeric tuples."""
         if not texts:
             return ()
         return tuple(tuple(float(value) for value in vector) for vector in self.model(texts))
 
     def embed(self, text: str) -> tuple[float, ...]:
+        """Embed one text using the local batch method."""
         return self.embed_many([text])[0]
 
 
@@ -53,6 +56,7 @@ class TokenAwareMiniLM(LocalMiniLM):
     max_input_tokens = 256
 
     def __init__(self, preferred_providers: list[str] | None = None) -> None:
+        """Initialize MiniLM and load its tokenizer without truncation or padding."""
         super().__init__(preferred_providers)
         tokenizer_path = self.model.DOWNLOAD_PATH / self.model.EXTRACTED_FOLDER_NAME / "tokenizer.json"
         if not tokenizer_path.is_file():
@@ -62,15 +66,18 @@ class TokenAwareMiniLM(LocalMiniLM):
         self.tokenizer.no_padding()
 
     def count_tokens(self, text: str) -> int:
+        """Return the number of tokenizer IDs produced for a text."""
         return len(self.tokenizer.encode(text).ids)
 
 class DeterministicPlanner:
     def plan(self, query: str):
+        """Build a deterministic query plan for the supplied question."""
         return understand_query(query)
 
 
 class MeasuredSectorSelector:
     def __init__(self, selector: SectorSelector) -> None:
+        """Wrap a sector selector and initialize request and failure counters."""
         self.selector = selector
         self.requests = 0
         self.failures = 0
@@ -81,6 +88,7 @@ class MeasuredSectorSelector:
         scores: dict[str, float],
         heuristic_sectors: tuple[str, ...],
     ) -> tuple[str, ...]:
+        """Count selector requests and failures while forwarding the selection."""
         if not scores:
             return ()
         self.requests += 1
@@ -92,6 +100,7 @@ class MeasuredSectorSelector:
 
 
 def budget_chunks(chunks, budget):
+    """Keep whole chunks in order while their token counts fit the budget."""
     selected = []
     used = 0
     for chunk in chunks:
@@ -102,6 +111,7 @@ def budget_chunks(chunks, budget):
 
 
 def budget_chunks_exact_words(chunks, budget):
+    """Truncate chunks to fit an exact whitespace-word budget."""
     if budget < 0:
         raise ValueError("Word budget must not be negative.")
     selected = []
@@ -124,6 +134,7 @@ def budget_chunks_exact_words(chunks, budget):
 
 
 def match_context_words(first, second, budget):
+    """Size-match two contexts to the same whitespace-word count."""
     matched = match_context_words_many(
         {"first": first, "second": second},
         budget,
@@ -132,6 +143,7 @@ def match_context_words(first, second, budget):
 
 
 def match_context_words_many(contexts, budget):
+    """Truncate multiple contexts to the largest common word count within budget."""
     if not contexts:
         raise ValueError("At least one context is required for size matching.")
     bounded = {
@@ -156,6 +168,7 @@ def match_context_words_many(contexts, budget):
 
 
 def document_metrics(expected, actual):
+    """Calculate document precision, recall, F1, any-hit, and all-source metrics."""
     expected, actual = set(expected), set(actual)
     if not expected:
         raise ValueError("Source pattern matched no documents.")
@@ -172,6 +185,7 @@ def document_metrics(expected, actual):
 
 
 def main() -> None:
+    """Index the Docugami corpus, run retrieval baselines, and write benchmark results."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--database", type=Path, required=True)

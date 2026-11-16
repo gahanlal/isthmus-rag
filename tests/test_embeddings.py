@@ -1,3 +1,5 @@
+"""Test embedding provider configuration, batching, and endpoint validation."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -6,10 +8,12 @@ from isthmus.embeddings import OpenAIEmbeddingProvider
 
 
 def test_openai_provider_batches_and_restores_input_order(monkeypatch):
+    """Verify that openai provider batches and restores input order."""
     class FakeClient:
         class Embeddings:
             @staticmethod
             def create(**kwargs):
+                """Return a configured fake response for the test request."""
                 assert kwargs["input"] == ["first", "second"]
                 assert kwargs["model"] == "chosen-embedding"
                 return SimpleNamespace(
@@ -34,6 +38,7 @@ def test_openai_provider_batches_and_restores_input_order(monkeypatch):
 
 
 def test_openai_provider_requires_a_key(monkeypatch):
+    """Verify that openai provider requires a key."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ISTHMUS_EMBEDDING_API_KEY", raising=False)
 
@@ -42,6 +47,7 @@ def test_openai_provider_requires_a_key(monkeypatch):
 
 
 def test_provider_identity_distinguishes_endpoint_and_dimensions(monkeypatch):
+    """Verify that provider identity distinguishes endpoint and dimensions."""
     monkeypatch.setattr("isthmus.embeddings.OpenAI", lambda **kwargs: object())
     original = OpenAIEmbeddingProvider("chosen", 512, "test")
     other_endpoint = OpenAIEmbeddingProvider("chosen", 512, "test", "http://localhost:8000/v1")
@@ -51,5 +57,6 @@ def test_provider_identity_distinguishes_endpoint_and_dimensions(monkeypatch):
 
 
 def test_provider_rejects_credentials_in_endpoint(monkeypatch):
+    """Verify that provider rejects credentials in endpoint."""
     with pytest.raises(ValueError, match="without credentials"):
         OpenAIEmbeddingProvider("chosen", api_key="test", base_url="https://user:pass@example.com/v1")

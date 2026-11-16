@@ -51,12 +51,14 @@ _ABSTENTION_PATTERN = re.compile(
 
 
 def _is_answerable(row: dict) -> bool:
+    """Classify a RepLiQA row from its answer and long-answer labels."""
     answer = str(row["answer"]).strip().casefold()
     long_answer = str(row.get("long_answer", "")).strip().casefold()
     return answer != "unanswerable" and long_answer != "na"
 
 
 def _answerability_counts(rows: list[dict]) -> dict[str, int]:
+    """Count answerable and unanswerable rows in a sample."""
     answerable = sum(_is_answerable(row) for row in rows)
     return {
         "answerable_cases": answerable,
@@ -65,19 +67,23 @@ def _answerability_counts(rows: list[dict]) -> dict[str, int]:
 
 
 def _configure_huggingface_token() -> None:
+    """Set HF_TOKEN from HF_API only when HF_TOKEN is not already set."""
     if os.getenv("HF_API") and not os.getenv("HF_TOKEN"):
         os.environ["HF_TOKEN"] = os.environ["HF_API"]
 
 
 def _normalized_tokens(text: str) -> tuple[str, ...]:
+    """Tokenize text case-insensitively into normalized word tokens."""
     return tuple(_TOKEN_PATTERN.findall(text.casefold()))
 
 
 def _stable_rank(seed: int, question_id: str) -> str:
+    """Create a deterministic hash rank for a seed and question identifier."""
     return hashlib.sha256(f"{seed}:{question_id}".encode("utf-8")).hexdigest()
 
 
 def stratified_sample(rows: list[dict], sample_size: int, seed: int) -> list[dict]:
+    """Select a deterministic sample balanced across topic and answerability groups."""
     if sample_size < 0:
         raise ValueError("Sample size must not be negative.")
     if sample_size > len(rows):
@@ -116,6 +122,7 @@ def stratified_sample(rows: list[dict], sample_size: int, seed: int) -> list[dic
 
 
 def load_repliqa(split: str) -> tuple[list[dict], str]:
+    """Load a pinned RepLiQA split and return its rows and dataset revision."""
     try:
         from datasets import load_dataset
     except ImportError as error:
@@ -137,6 +144,7 @@ def load_repliqa(split: str) -> tuple[list[dict], str]:
 
 
 def validate_rows(rows: list[dict]) -> dict[str, dict]:
+    """Validate RepLiQA fields, document consistency, unique IDs, and question counts."""
     required_fields = {
         "document_id",
         "document_topic",
@@ -190,6 +198,7 @@ def _prepare_document(
     record: dict,
     provider: TokenAwareMiniLM,
 ) -> tuple[Document, tuple[Chunk, ...], tuple[Relationship, ...]]:
+    """Parse one source document and remap its document, chunk, and relationship IDs."""
     document, chunks, relationships = parse_document_bytes(
         record["text"].encode("utf-8"),
         f"{source_id}.txt",
@@ -234,6 +243,7 @@ def index_corpus(
     records: dict[str, dict],
     provider: TokenAwareMiniLM,
 ) -> dict[str, str]:
+    """Index missing documents in one RepLiQA split and return source-to-index IDs."""
     expected_ids = {
         f"repliqa:{split}:{source_id}": source_id
         for source_id in records
@@ -290,6 +300,7 @@ def _passage_metrics(
     retrieved_chunks: tuple[Chunk, ...],
     document_text: str,
 ) -> dict:
+    """Measure whether a valid reference passage occurs in the retrieved chunks."""
     passage = row["long_answer"].strip()
     if not _is_answerable(row) or passage.casefold() == "na":
         return {
@@ -329,6 +340,7 @@ def _passage_metrics(
 
 
 def _contains_tokens(haystack: tuple[str, ...], needle: tuple[str, ...]) -> bool:
+    """Check whether one token sequence occurs contiguously in another."""
     if not needle or len(needle) > len(haystack):
         return False
     width = len(needle)
@@ -336,6 +348,7 @@ def _contains_tokens(haystack: tuple[str, ...], needle: tuple[str, ...]) -> bool
 
 
 def _retrieval_summary(per_case: list[dict], arm_names: tuple[str, ...]) -> dict:
+    """Summarize document hits, valid labels, passage recall, context size, and latency."""
     answerable = [case for case in per_case if case["answerable"]]
     summary = {}
     for arm in arm_names:
@@ -368,6 +381,7 @@ def _retrieval_summary(per_case: list[dict], arm_names: tuple[str, ...]) -> dict
 
 
 def _correct_report_answerability(report: dict, rows: list[dict]) -> dict:
+    """Apply source answerability labels and recompute affected report metrics."""
     rows_by_id = {row["question_id"]: row for row in rows}
     for case in report["per_case_retrieval"]:
         case["answerable"] = _is_answerable(rows_by_id[case["question_id"]])
@@ -430,10 +444,12 @@ def _correct_report_answerability(report: dict, rows: list[dict]) -> dict:
 
 
 def _looks_like_abstention(text: str) -> bool:
+    """Return whether an answer contains a recognized abstention phrase."""
     return bool(_ABSTENTION_PATTERN.search(text))
 
 
 def _safe_answer_record(answer: dict) -> dict:
+    """Remove full cited passage text while retaining citation metadata."""
     result = {
         key: value
         for key, value in answer.items()
@@ -453,6 +469,7 @@ def _write_human_review_csv(
     answer_model: str,
     judge_model: str,
 ) -> None:
+    """Write answer, reference, citation, and judge fields for manual review."""
     rows_by_id = {row["question_id"]: row for row in rows}
     fieldnames = (
         "question_id",
@@ -519,6 +536,7 @@ def _write_answer_progress(
     answer_model: str,
     judge_model: str,
 ) -> None:
+    """Atomically persist completed cases and the current answer case."""
     payload = {
         "question_ids": [row["question_id"] for row in rows],
         "answer_model": answer_model,
@@ -544,6 +562,7 @@ def _answer_qa(
     judge_model: str,
     progress_path: Path | None = None,
 ) -> tuple[list[dict], dict]:
+    """Generate size-matched answers, save progress, and judge the RepLiQA QA sample."""
     provider = OpenAIAnswerProvider(answer_model, os.getenv("ISTHMUS_ANSWER_BASE_URL") or None)
     question_ids = [row["question_id"] for row in rows]
     cases = []
@@ -723,6 +742,7 @@ def _answer_qa(
 
 
 def _answer_qa_summary(cases: list[dict]) -> dict:
+    """Aggregate judge scores, failures, abstention rates, and pairwise results by arm."""
     judged = [case for case in cases if case["judge_scores"] is not None]
     summary = {
         "requested_cases": len(cases),
@@ -780,6 +800,7 @@ def _answer_qa_summary(cases: list[dict]) -> dict:
 
 
 def main() -> None:
+    """Load and index a RepLiQA split, evaluate retrieval and answers, and write the report."""
     load_dotenv()
     _configure_huggingface_token()
     parser = argparse.ArgumentParser(description=__doc__)

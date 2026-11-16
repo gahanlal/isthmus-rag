@@ -1,3 +1,5 @@
+"""Generate evidence-grounded answers and validate their citations."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -54,6 +56,7 @@ _ASSESSMENT_PROMPT = (
 
 class OpenAIAnswerProvider:
     def __init__(self, model: str, base_url: str | None = None) -> None:
+        """Validate the model and configure the OpenAI-compatible answer client."""
         if not model.strip():
             raise ValueError("Specify an answer model ID.")
         self.model = model.strip()
@@ -63,12 +66,15 @@ class OpenAIAnswerProvider:
         self.client = OpenAI(api_key=key, base_url=base_url or None)
 
     def generate(self, prompt: str) -> str:
+        """Request an answer using the evidence-only system prompt."""
         return self._complete(prompt, _SYSTEM_PROMPT)
 
     def assess(self, prompt: str) -> str:
+        """Request a citation-support assessment using the assessment prompt."""
         return self._complete(prompt, _ASSESSMENT_PROMPT)
 
     def _complete(self, prompt: str, system: str) -> str:
+        """Send a chat completion and return its non-empty text."""
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
@@ -87,6 +93,7 @@ class OpenAIAnswerProvider:
 
 class AnthropicAnswerProvider:
     def __init__(self, model: str, base_url: str | None = None) -> None:
+        """Validate the model and configure the Anthropic answer client."""
         if not model.strip():
             raise ValueError("Specify an answer model ID.")
         self.model = model.strip()
@@ -96,12 +103,15 @@ class AnthropicAnswerProvider:
         self.client = Anthropic(api_key=key, base_url=base_url or None)
 
     def generate(self, prompt: str) -> str:
+        """Request an answer using the evidence-only system prompt."""
         return self._complete(prompt, _SYSTEM_PROMPT)
 
     def assess(self, prompt: str) -> str:
+        """Request a citation-support assessment using the assessment prompt."""
         return self._complete(prompt, _ASSESSMENT_PROMPT)
 
     def _complete(self, prompt: str, system: str) -> str:
+        """Send a message request and join its non-empty text blocks."""
         response = self.client.messages.create(
             model=self.model,
             max_tokens=2048,
@@ -115,6 +125,7 @@ class AnthropicAnswerProvider:
 
 
 def answer_provider(protocol: str, model: str, base_url: str | None = None) -> AnswerProvider:
+    """Construct the answer provider for the requested API protocol."""
     if protocol == "openai":
         return OpenAIAnswerProvider(model, base_url)
     if protocol == "anthropic":
@@ -127,6 +138,7 @@ def generate_answer(
     documents: dict[str, Document],
     provider: AnswerProvider,
 ) -> GeneratedAnswer:
+    """Generate an evidence-grounded answer and reject invalid or unsupported citations."""
     if not result.context:
         return GeneratedAnswer("Insufficient evidence to answer the question.", ())
 

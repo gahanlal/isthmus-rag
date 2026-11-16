@@ -1,3 +1,5 @@
+"""Provide the Streamlit interface for indexing documents, retrieving evidence, and evaluating search."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -27,6 +29,7 @@ from isthmus.query import sector_selector_from_environment
 
 
 def main() -> None:
+    """Render the Streamlit app and connect its pages to the configured index."""
     load_dotenv()
     st.set_page_config(page_title="Isthmus", layout="wide")
     st.title("Isthmus")
@@ -83,6 +86,7 @@ def main() -> None:
 
 
 def _documents_page(index: BackendIndex) -> None:
+    """Render sector management, document uploads, indexing, and deletion controls."""
     st.subheader("Sectors")
     with st.form("create_sector", clear_on_submit=True):
         sector_name = st.text_input("New sector name")
@@ -174,6 +178,7 @@ def _documents_page(index: BackendIndex) -> None:
 
 
 def _retrieval_page(index: BackendIndex) -> None:
+    """Run retrieval and display answers, evidence, scores, and the graph trace."""
     query = st.text_input("Ask a question")
     generate = st.checkbox("Generate an answer", value=False)
     protocol = "openai"
@@ -280,6 +285,7 @@ def _retrieval_page(index: BackendIndex) -> None:
 
 
 def _graph_dot(index: BackendIndex, package) -> str:
+    """Render a retrieval evidence package as a Graphviz DOT graph."""
     node_names = {
         chunk_id: f"node_{position}"
         for position, chunk_id in enumerate(package.visited_chunk_ids)
@@ -315,6 +321,7 @@ def _graph_dot(index: BackendIndex, package) -> str:
 
 
 def _evaluation_page(index: BackendIndex) -> None:
+    """Load labeled cases, run retrieval evaluation, and display its report."""
     st.subheader("Compare retrieval baselines")
     st.caption(
         "Upload JSONL with manually labeled supporting chunk IDs. "
