@@ -22,12 +22,14 @@ correct.
 
 ## How retrieval works
 
-Isthmus starts with a global vector search, expands evidence within candidate
-documents, and then selects document-level evidence packages for the answer.
+Isthmus starts with a global hybrid search (BM25 lexical ranking fused with
+dense-vector ranking), expands evidence within candidate documents, and then
+selects document-level evidence packages for the answer. Vector-only retrieval
+remains available as a controlled comparison.
 
 ```mermaid
 flowchart TD
-    Q[Question] --> V[Global vector search<br/>ranked seed chunks]
+    Q[Question] --> V[Global hybrid search<br/>BM25 + dense-vector ranked seeds]
     V --> S[Sector scoring<br/>candidate documents]
     S --> D[Ranked hits grouped by document]
     subgraph Expansion["Within each candidate document"]
@@ -90,12 +92,21 @@ over another document repeating what is already covered. By default, selection
 can include up to five documents; after the first pick, a package with no new
 supported requirement is skipped when its marginal gain is below 0.05.
 
-## What we learned from testing
+## What I learned from testing
 
-We tested Isthmus on two public data sources. The results are early evidence,
+I tested Isthmus on two public data sources. The results are early evidence,
 not proof that Isthmus is better than standard search.
 
-On the RepLiQA question set, we measured natural retrieval context and compared
+**The RepLiQA numbers below are from the earlier dense-vector-only run.** They
+are historical results, not evidence that hybrid retrieval improves quality or
+efficiency. The evaluation runner now includes single-seed, multi-seed,
+`QUALIFIES`-disabled, sector-routing, hybrid-only, fixed-target, and
+marginal-coverage arms, and can run the full pipeline in either hybrid or
+vector mode. It defaults to a free local MiniLM model; OpenAI embeddings are
+opt-in. A controlled hybrid rerun is required before drawing conclusions about
+the new default.
+
+On the RepLiQA question set, I measured natural retrieval context and compared
 answer quality across four methods. For the answer-quality comparison, each
 method saw the same amount of text for a given question; GPT-4o-mini wrote and
 scored the answers. Scores are averages from 64 answerable questions that
@@ -183,6 +194,10 @@ graph search did not change the retrieval scores.
 annotated answer passage appeared in retrieved text. Context size is the
 average whitespace-delimited word and document count.
 
+The evaluator also reports lexical passage-token precision and recovered gold
+passage tokens per 1,000 context tokens. Those overlap metrics are lexical
+proxies, not proof that the retrieved text semantically supports an answer.
+
 | Retrieval method | Gold-document hit | Exact passage found | Passage words recovered | Mean context words | Mean documents |
 |---|---:|---:|---:|---:|---:|
 | Standard search (top-k) | 91.8% | 82.4% | 86.2% | 1,505 | 18.98 |
@@ -207,7 +222,7 @@ correctness.
 - [Docugami KG-RAG-datasets](https://github.com/docugami/KG-RAG-datasets) —
   used for a document-search test on 77 PDFs and 171 questions.
 - [ServiceNow RepLiQA](https://huggingface.co/datasets/ServiceNow/repliqa) —
-  used for the question-answer test. We indexed the full `repliqa_4` split and
+  used for the question-answer test. I indexed the full `repliqa_4` split and
   reviewed a 100-question sample.
 
 
