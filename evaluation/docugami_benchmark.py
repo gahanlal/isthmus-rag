@@ -36,8 +36,8 @@ SECTORS = (
 class LocalMiniLM:
     provider_id = "chromadb-onnx-all-MiniLM-L6-v2:384"
 
-    def __init__(self) -> None:
-        self.model = ONNXMiniLM_L6_V2()
+    def __init__(self, preferred_providers: list[str] | None = None) -> None:
+        self.model = ONNXMiniLM_L6_V2(preferred_providers=preferred_providers)
 
     def embed_many(self, texts: list[str]) -> tuple[tuple[float, ...], ...]:
         if not texts:
@@ -52,8 +52,8 @@ class TokenAwareMiniLM(LocalMiniLM):
     provider_id = "chromadb-onnx-all-MiniLM-L6-v2:384:token-aware-v1"
     max_input_tokens = 256
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, preferred_providers: list[str] | None = None) -> None:
+        super().__init__(preferred_providers)
         tokenizer_path = self.model.DOWNLOAD_PATH / self.model.EXTRACTED_FOLDER_NAME / "tokenizer.json"
         if not tokenizer_path.is_file():
             self.model(["Initialize tokenizer"])

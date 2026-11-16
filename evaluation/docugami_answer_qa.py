@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from openai import OpenAIError
 from pypdf import PdfReader
 
-from docugami_benchmark import (
+from evaluation.docugami_benchmark import (
     DeterministicPlanner,
     TokenAwareMiniLM,
     match_context_words_many,
