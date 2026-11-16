@@ -50,6 +50,12 @@ such as “except”, “unless”, or “provided that”. Isthmus follows thes
 only for queries asking about exceptions. A qualifying target can be traversed
 and included at similarity 0.42 or higher, below the ordinary 0.62 cutoff.
 
+**Heuristic limitation:** `QUALIFIES` links are inferred from keywords and
+nearby text, not semantically verified, so they can be false. Spot checks found
+obvious false links in a deterministic sample of 40 predicted edges in the
+Docugami audit. This assistant-reviewed sample is too small to estimate
+precision and does not measure missed links.
+
 ### Multi-seed example
 
 Suppose the question is, “Who qualifies for the travel allowance, and what
