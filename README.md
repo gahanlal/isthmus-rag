@@ -4,6 +4,16 @@ Isthmus is an experimental document-search tool. It looks for useful passages
 in a collection of files, checks nearby text for extra context, and can ask an
 AI model to draft an answer with citations.
 
+> **Can Isthmus retrieve sufficient evidence with significantly less context?**
+>
+> On RepLiQA, marginal selection returned an average of 724 natural-context
+> words instead of 1,505 (about 52% less) and selected about one document
+> instead of 19. In a separate equal-context answer-quality comparison, both
+> methods scored 3.30/4 correctness. Marginal retrieval had lower gold-document
+> hit and source-support scores, so this is promising evidence, not proof that
+> shorter contexts consistently preserve relevant evidence or reduce generation
+> cost.
+
 ## Status
 
 This is a research prototype, not a production-ready product. It can miss
