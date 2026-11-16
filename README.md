@@ -10,16 +10,118 @@ This is a research prototype, not a production-ready product. It can miss
 important information, and citations do not guarantee that an answer is
 correct.
 
+## How retrieval works
+
+Isthmus starts with a global vector search, expands evidence within candidate
+documents, and then selects document-level evidence packages for the answer.
+
+```mermaid
+flowchart TD
+    Q[Question] --> V[Global vector search<br/>ranked seed chunks]
+    V --> S[Sector scoring<br/>candidate documents]
+    S --> D[Ranked hits grouped by document]
+    subgraph Expansion["Within each candidate document"]
+        D --> B[Interleaved per-seed BFS<br/>PREVIOUS and NEXT]
+        B --> T[Visited chunks and traversal paths]
+        B -->|exception questions| R[QUALIFIES edge<br/>rule to exception]
+        R --> T
+        T --> I[Inclusion gate<br/>relevance, requirements, token cap]
+    end
+    I --> P[Evidence package per document]
+    P --> M[Greedy marginal-coverage selection]
+    M --> C[Assembled context]
+    C --> A[Answer with citations]
+```
+
+### Traversal is not inclusion
+
+Each ranked hit seeds its own breadth-first traversal state. The states are
+interleaved in a FIFO queue, with per-seed paths and directional limits plus
+document-wide node and token caps. A visited chunk can help the search reach
+useful nearby evidence without being included in the answer context. Seeds are
+eligible for inclusion; other chunks must pass the similarity or
+requirement-support checks. All included chunks are subject to the token cap.
+By default, the similarity cutoff is 0.62 and each document package is limited
+to 1,800 tokens.
+
+The parser creates `QUALIFIES` relationships from a rule chunk to a nearby
+exception or qualification chunk when its text or heading contains signals
+such as “except”, “unless”, or “provided that”. Isthmus follows these edges
+only for queries asking about exceptions. A qualifying target can be traversed
+and included at similarity 0.42 or higher, below the ordinary 0.62 cutoff.
+
+### Multi-seed example
+
+Suppose the question is, “Who qualifies for the travel allowance, and what
+exceptions apply?” Global vector search returns two seed chunks in one policy
+document: an eligibility rule and a related allowance section. Each seed gets
+its own BFS state. The eligibility traversal may visit a low-similarity
+definition as a bridge but leave it out of the evidence package, while
+following a `QUALIFIES` edge to a relevant “unless ...” clause. Since the
+question asks about exceptions, that clause can be included at the lower
+0.42 threshold. The package records the seeds, visited paths, included chunks,
+and requirement scores; it does not treat every visited chunk as answer
+evidence.
+
+### Selecting documents by marginal coverage
+
+After expansion, Isthmus builds one evidence package per candidate document.
+The default selector repeatedly chooses the package with the best combined
+score: 55% marginal requirement coverage and 45% relevance. Marginal coverage
+is the average improvement in query-requirement scores over the packages
+already selected. This favors a relevant document that adds missing evidence
+over another document repeating what is already covered. By default, selection
+can include up to five documents; after the first pick, a package with no new
+supported requirement is skipped when its marginal gain is below 0.05.
+
 ## What we learned from testing
 
 We tested Isthmus on two public data sources. The results are early evidence,
 not proof that Isthmus is better than standard search.
 
-On the RepLiQA question set, we compared four ways of choosing text. Each
-method saw the same amount of text for a given question. GPT-4o-mini wrote and
+On the RepLiQA question set, we measured natural retrieval context and compared
+answer quality across four methods. For the answer-quality comparison, each
+method saw the same amount of text for a given question; GPT-4o-mini wrote and
 scored the answers. Scores are averages from 64 answerable questions that
 could be scored across every method. An unanswerable question is one whose
 answer is not in the document.
+
+### The context reduction
+
+The marginal-coverage pipeline returned about half as much natural context and
+selected about one document instead of 19. Retrieval metrics show the tradeoff:
+
+| Metric | Standard search | Isthmus marginal |
+|---|---:|---:|
+| Mean context words | 1,505 | **724** |
+| Mean documents | 18.98 | **1.02** |
+| Gold-document hit | 91.8% | 80.8% |
+| Passage words recovered | 86.2% | 81.5% |
+
+Gold-document hit is measured on 73 answerable questions; passage-word recall
+uses the 68 reference passages verified in their source documents.
+
+Natural context words per query (bars are scaled to about 75 words):
+
+```text
+Standard search   ####################  1,505
+Isthmus marginal  ##########              724
+```
+
+That is about 52% fewer context words, with an 11-point lower gold-document
+hit rate and 4.7 points lower passage-word recall. The compact context is a
+meaningful efficiency result worth investigating, not a free improvement in
+retrieval quality.
+
+In the separate answer-quality comparison, standard search and Isthmus
+marginal coverage both averaged **3.30/4 correctness**. However, those answers
+were generated from equal-sized contexts, clipped to the same word count per
+question. This tests answer quality at controlled context size; it does not
+measure generation-token or API-cost savings from the natural 724-word output.
+That requires a separate end-to-end cost measurement using each method's
+unclipped context.
+
+### Answer quality at equal context sizes
 
 | Method | Accuracy (0–4) | Completeness (0–4) | Supported by sources (0–4) | Correctly said “not in document” |
 |---|---:|---:|---:|---:|
@@ -28,11 +130,12 @@ answer is not in the document.
 | Isthmus (fixed-target selection) | 3.30 | 3.38 | 2.56 | 12% |
 | Isthmus (marginal-coverage selection) | 3.30 | 3.42 | 2.61 | 0% |
 
-**The main finding:** Isthmus can use less text, but this test did not show that
-the smaller, more selective context gives better answers. Standard search had
-the strongest completeness and source-support scores. Marginal coverage
-usually chose about one document, compared with about 19 for standard search,
-but it did not refuse any unanswerable question in this sample.
+**The main finding:** marginal coverage returned about 52% less natural
+context, while tying standard search on correctness in the equal-sized answer
+test. The tradeoff was lower gold-document hit rate and source-support scores.
+This is a promising compact-retrieval result, not proof that the natural
+shorter context preserves answer quality or lowers generation cost. Marginal
+coverage did not refuse any unanswerable question in this sample.
 
 Scores range from 0 to 4, with higher being better. “Correctly said not in
 document” is the share of unanswerable questions where the model did not guess.
@@ -117,7 +220,7 @@ For developers, with Python 3.11 or newer:
 ```powershell
 git clone https://github.com/gahanlal/isthmus-rag.git
 cd isthmus-rag
-py -3.14 -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m pytest
